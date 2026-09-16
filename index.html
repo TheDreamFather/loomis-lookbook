@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LOOMIS — Better Living Systems · Concept Lookbook</title>
+<meta name="description" content="Better Living Systems presents the Loomis concept lookbook — cinema, light, sound and control, curated for a singular residence.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060605;
+    --bg-2:#0c0c0b;
+    --panel:#0f0f0e;
+    --panel-2:#161614;
+    --ivory:#efe9dd;
+    --ivory-dim:#d9d2c4;
+    --muted:#8c867a;
+    --muted-2:#5c574d;
+    --line:rgba(239,233,221,.14);
+    --line-soft:rgba(239,233,221,.06);
+    --accent:#b99a63;
+    --accent-soft:#cbb488;
+    --serif:'Instrument Serif',Georgia,serif;
+    --sans:'Inter Tight','Helvetica Neue',Arial,sans-serif;
+    --maxw:1440px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--bg);color:var(--ivory);
+    font-family:var(--sans);font-weight:300;
+    -webkit-font-smoothing:antialiased;letter-spacing:.01em;line-height:1.6;
+    overflow-x:hidden;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--accent);color:#060605}
+  img{max-width:100%}
+
+  /* subtle film grain overlay for cinematic depth */
+  body::after{
+    content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:.035;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:100;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:22px clamp(20px,5vw,64px);
+    transition:padding .5s ease,background .5s ease,border-color .5s ease;
+    border-bottom:1px solid transparent;
+  }
+  .topbar.solid{background:rgba(6,6,5,.86);backdrop-filter:blur(14px);border-bottom:1px solid var(--line-soft);padding-top:15px;padding-bottom:15px}
+  .brand{display:flex;align-items:center;gap:16px;cursor:pointer}
+  .brand .logo{height:26px;width:auto;display:block;opacity:.96}
+  .brand .wordmark-fallback{font-family:var(--serif);font-size:22px;letter-spacing:.02em;color:var(--ivory)}
+  .brand .divider-v{width:1px;height:22px;background:var(--line)}
+  .brand .proj{font-size:9.5px;letter-spacing:.42em;text-transform:uppercase;color:var(--muted)}
+  .topbar-right{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted)}
+
+  /* ---------- Hero ---------- */
+  .hero{
+    position:relative;min-height:100vh;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;overflow:hidden;
+    background:radial-gradient(130% 100% at 50% 0%,#161512 0%,#0a0a09 42%,#050504 100%);
+  }
+  .hero::before{
+    content:"";position:absolute;inset:0;pointer-events:none;
+    background:
+      radial-gradient(52% 40% at 50% 46%,rgba(185,154,99,.10),transparent 72%),
+      radial-gradient(120% 90% at 50% 120%,rgba(0,0,0,.8),transparent 60%);
+  }
+  .hero-inner{position:relative;z-index:2;padding:0 24px;max-width:1000px}
+  .hero .presents{
+    display:flex;align-items:center;justify-content:center;gap:14px;
+    font-size:11px;letter-spacing:.46em;text-transform:uppercase;color:var(--muted);
+    margin-bottom:44px;opacity:0;animation:fade 1.4s ease .2s forwards;
+  }
+  .hero .presents img{height:22px;width:auto;opacity:.9}
+  .hero h1{
+    font-family:var(--serif);font-weight:400;font-style:normal;
+    font-size:clamp(88px,20vw,300px);line-height:.86;letter-spacing:.04em;
+    color:var(--ivory);
+    opacity:0;animation:riseHero 1.8s cubic-bezier(.16,1,.3,1) .35s forwards;
+  }
+  .hero h1 .i{font-style:italic;color:var(--accent-soft)}
+  .hero .kicker{
+    margin-top:30px;font-size:12.5px;letter-spacing:.5em;text-transform:uppercase;color:var(--ivory-dim);
+    opacity:0;animation:fade 1.6s ease .8s forwards;
+  }
+  .hero .tagline{
+    margin:26px auto 0;max-width:540px;font-size:15.5px;color:var(--muted);letter-spacing:.02em;line-height:1.95;
+    opacity:0;animation:fade 1.6s ease 1s forwards;
+  }
+  .hero .divider{width:1px;height:78px;margin:46px auto 0;background:linear-gradient(var(--accent),transparent);
+    opacity:0;animation:growLine 1.4s ease 1.2s forwards;transform-origin:top}
+  .scroll-cue{position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:2;
+    font-size:9.5px;letter-spacing:.4em;text-transform:uppercase;color:var(--muted-2);
+    animation:pulse 3s ease-in-out infinite}
+  @keyframes riseHero{from{opacity:0;transform:translateY(40px);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+  @keyframes fade{to{opacity:1}}
+  @keyframes growLine{from{opacity:0;transform:scaleY(0)}to{opacity:1;transform:scaleY(1)}}
+  @keyframes pulse{0%,100%{opacity:.3}50%{opacity:.85}}
+  /* Failsafe: never leave content hidden if animations/observers don't run */
+  @media (prefers-reduced-motion: reduce){
+    .hero .presents,.hero h1,.hero .kicker,.hero .tagline,.hero .divider{opacity:1!important;animation:none!important;transform:none!important}
+    .card{opacity:1!important;transform:none!important}
+  }
+  .ready .card{opacity:1;transform:none}
+
+  /* ---------- Category nav (tabs) ---------- */
+  .nav-wrap{position:sticky;top:0;z-index:90;background:rgba(6,6,5,.9);backdrop-filter:blur(14px);
+    border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft)}
+  .nav{max-width:var(--maxw);margin:0 auto;display:flex;gap:2px;overflow-x:auto;padding:0 clamp(12px,4vw,48px);scrollbar-width:none}
+  .nav::-webkit-scrollbar{display:none}
+  .tab{flex:0 0 auto;position:relative;background:none;border:none;cursor:pointer;color:var(--muted);
+    font-family:var(--sans);font-size:10.5px;font-weight:400;letter-spacing:.26em;text-transform:uppercase;
+    padding:22px 20px;white-space:nowrap;transition:color .4s ease}
+  .tab:hover{color:var(--ivory)}
+  .tab.active{color:var(--accent-soft)}
+  .tab.active::after{content:"";position:absolute;left:20px;right:20px;bottom:0;height:1px;background:var(--accent)}
+
+  /* ---------- Category content ---------- */
+  main{max-width:var(--maxw);margin:0 auto;padding:clamp(60px,9vw,130px) clamp(20px,5vw,64px) 140px}
+  .cat-head{margin-bottom:64px;max-width:820px}
+  .cat-head .eyebrow{font-size:10.5px;letter-spacing:.48em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:22px}
+  .cat-head h2{font-family:var(--serif);font-weight:400;font-size:clamp(54px,9vw,120px);line-height:.94;letter-spacing:.02em;color:var(--ivory)}
+  .cat-head p{margin-top:26px;color:var(--muted);font-size:16px;max-width:640px;line-height:1.95}
+
+  /* ---------- Grid of cards ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:clamp(18px,2vw,28px)}
+  .card{position:relative;background:var(--panel);border:1px solid var(--line-soft);overflow:hidden;
+    display:flex;flex-direction:column;opacity:0;transform:translateY(30px);
+    transition:border-color .6s ease,transform 1s cubic-bezier(.16,1,.3,1),opacity 1s ease,box-shadow .6s ease}
+  .card.in{opacity:1;transform:none}
+  .card:hover{border-color:var(--line);box-shadow:0 30px 80px -30px rgba(0,0,0,.9)}
+  .card-media{position:relative;aspect-ratio:4/3;background:var(--panel-2);overflow:hidden}
+  .card-media img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.9) brightness(.94);
+    transition:transform 1.4s cubic-bezier(.16,1,.3,1),filter .7s ease}
+  .card:hover .card-media img{transform:scale(1.07);filter:saturate(1.04) brightness(1)}
+  .card-media iframe,.card-media video{width:100%;height:100%;border:0;display:block;background:#000}
+  .media-fallback{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+    background:radial-gradient(80% 80% at 50% 32%,rgba(185,154,99,.09),transparent),repeating-linear-gradient(135deg,#141412 0 14px,#0f0f0e 14px 28px);color:var(--muted-2)}
+  .media-fallback .fi{width:46px;height:46px;border:1px solid var(--line);border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:18px}
+  .media-fallback span{font-size:9.5px;letter-spacing:.34em;text-transform:uppercase}
+  .play-badge{position:absolute;top:16px;left:16px;z-index:3;display:flex;align-items:center;gap:8px;
+    background:rgba(6,6,5,.7);border:1px solid var(--line);border-radius:100px;padding:6px 13px 6px 11px;
+    font-size:8.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--accent-soft)}
+  .play-badge .tri{width:0;height:0;border-left:7px solid var(--accent);border-top:5px solid transparent;border-bottom:5px solid transparent}
+  .video-cover{position:absolute;inset:0;z-index:2;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,rgba(6,6,5,.1),rgba(6,6,5,.6));transition:opacity .5s ease}
+  .video-cover .ring{width:82px;height:82px;border:1px solid var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;
+    background:rgba(6,6,5,.35);backdrop-filter:blur(2px);transition:transform .5s ease,background .5s ease}
+  .video-cover:hover .ring{transform:scale(1.09);background:rgba(185,154,99,.16)}
+  .video-cover .ring .tri{width:0;height:0;border-left:17px solid var(--accent);border-top:12px solid transparent;border-bottom:12px solid transparent;margin-left:5px}
+  .placeholder-flag{position:absolute;top:16px;right:16px;z-index:3;background:rgba(6,6,5,.66);border:1px dashed var(--line);border-radius:100px;
+    padding:5px 12px;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted)}
+  .card-body{padding:30px 30px 32px;display:flex;flex-direction:column;flex:1}
+  .card-brand{font-size:9.5px;letter-spacing:.36em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .card-title{font-family:var(--serif);font-size:32px;font-weight:400;line-height:1.08;letter-spacing:.01em;color:var(--ivory)}
+  .card-desc{margin-top:14px;color:var(--muted);font-size:14px;line-height:1.85;flex:1}
+  .card-foot{margin-top:26px;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .card-link{font-size:10px;letter-spacing:.28em;text-transform:uppercase;color:var(--ivory);display:inline-flex;align-items:center;gap:10px;transition:color .4s ease}
+  .card-link:hover{color:var(--accent-soft)}
+  .card-link .arrow{transition:transform .45s ease}
+  .card-link:hover .arrow{transform:translateX(6px)}
+  .card-link.disabled{color:var(--muted-2);pointer-events:none}
+  .empty-note{grid-column:1/-1;padding:70px;text-align:center;color:var(--muted-2);border:1px dashed var(--line-soft);font-size:13px;letter-spacing:.05em}
+
+  /* ---------- Footer ---------- */
+  footer{border-top:1px solid var(--line-soft);padding:64px clamp(20px,5vw,64px);max-width:var(--maxw);margin:0 auto;
+    display:flex;flex-wrap:wrap;gap:28px;justify-content:space-between;align-items:flex-start}
+  footer .f-logo{height:26px;width:auto;opacity:.9;margin-bottom:14px;display:block}
+  footer .f-brand-fallback{font-family:var(--serif);font-size:22px;letter-spacing:.02em;margin-bottom:14px}
+  footer .f-note{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted-2);max-width:540px;line-height:2.1}
+
+  @media(max-width:640px){
+    .brand .divider-v,.brand .proj{display:none}
+    .topbar-right{display:none}
+    .grid{grid-template-columns:1fr}
+    .hero h1{font-size:clamp(72px,26vw,120px)}
+  }
+</style>
+</head>
+<body>
+
+  <header class="topbar" id="topbar">
+    <div class="brand" onclick="goHome()">
+      <img class="logo" src="https://betterlivingsystems.com/images/logo-word-light.png" alt="Better Living Systems" onerror="this.outerHTML='&lt;span class=&quot;wordmark-fallback&quot;&gt;Better Living Systems&lt;/span&gt;'">
+      <span class="divider-v"></span>
+      <span class="proj">The Loomis Project</span>
+    </div>
+    <div class="topbar-right">Private Client Presentation</div>
+  </header>
+
+  <section class="hero" id="hero">
+    <div class="hero-inner">
+      <div class="presents">
+        <img src="https://betterlivingsystems.com/images/logo-word-light.png" alt="Better Living Systems" onerror="this.replaceWith(document.createTextNode('Better Living Systems'))">
+        <span>Presents</span>
+      </div>
+      <h1>LOOM<span class="i">I</span>S</h1>
+      <div class="kicker">A Residential Concept Lookbook</div>
+      <p class="tagline">Cinema, light, sound and control — curated by Better Living Systems for a singular residence.</p>
+      <div class="divider"></div>
+    </div>
+    <div class="scroll-cue">Explore the Concepts</div>
+  </section>
+
+  <div class="nav-wrap" id="navwrap">
+    <nav class="nav" id="tabs"></nav>
+  </div>
+
+  <main id="content"></main>
+
+  <footer>
+    <div>
+      <img class="f-logo" src="https://betterlivingsystems.com/images/logo-word-light.png" alt="Better Living Systems" onerror="this.outerHTML='&lt;div class=&quot;f-brand-fallback&quot;&gt;Better Living Systems&lt;/div&gt;'">
+      <div class="f-note">Loomis concept lookbook · prepared for private presentation</div>
+    </div>
+    <div class="f-note">
+      Product imagery and copy shown as concept references from distribution partners.<br>
+      Prepared by Better Living Systems for client review — not for redistribution.
+    </div>
+  </footer>
+
+<script>
+/* ============================================================
+   BRAND
+   ------------------------------------------------------------
+   To use the real BLS logo image, set BLS_LOGO to its URL (png/svg).
+   It replaces the monogram + wordmark in the header. Leave "" to
+   keep the typographic wordmark.
+   ============================================================ */
+const BLS_LOGO = ""; // e.g. "assets/bls-logo.svg"
+
+/* ============================================================
+   LOOMIS CONTENT MODEL  ·  Better Living Systems
+   ------------------------------------------------------------
+   One object = one concept card. To add / swap an item, edit the
+   `items` array under the matching category.
+
+   {
+     type: "image" | "video",     // video shows a play button
+     title, brand, description,
+     image:    "https://...jpg"    // photo, or video poster/thumbnail ("" = elegant fallback tile)
+     videoUrl: "https://youtube.com/... | vimeo | .mp4"
+     link:     "https://partner-product-page"
+     placeholder: true             // only for not-yet-sourced concepts; omit/false for real cards
+   }
+   ============================================================ */
+
+const LOOMIS = [
+  {
+    id:"theater", label:"Theater", title:"Theater",
+    intro:"Purpose-built cinema — reference-grade loudspeakers, bespoke seating, and rooms designed around a single perfect sightline.",
+    items:[
+      {type:"image",title:"Extreme Home Theatre",brand:"KEF",description:"THX-Certified Dominus & Ultra architectural speaker systems engineered for breathtakingly realistic, fully immersive cinematic sound — just as the director intended.",image:"https://us.kef.com/cdn/shop/collections/Hero_DT_1440x810_4.jpg?v=1783071876",videoUrl:"",link:"https://us.kef.com/collections/extreme-home-theatre"},
+      {type:"image",title:"Cinema Seating",brand:"CinemaTech",description:"Bespoke luxury home-theater seating — hand-built, motorized, and upholstered to the room. Image to be supplied.",image:"",videoUrl:"",link:"https://cinematech.com/"},
+      {type:"image",title:"Theater Design & Screens",brand:"CinemaTech",description:"Turnkey private cinema design — acoustically engineered rooms and reference screens tailored to the space. Image to be supplied.",image:"",videoUrl:"",link:"https://cinematech.com/"}
+    ]
+  },
+  {
+    id:"lighting", label:"Lighting", title:"Lighting",
+    intro:"Architectural and layered light — natural-spectrum color, hidden sources, and scenes that shape every room by hour and mood.",
+    items:[
+      {type:"image",title:"Native by Design",brand:"Lutron",description:"A collaboration between Lutron's intelligent light and world-class design partners — fixtures that redefine how a space looks, feels, and functions.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-08/web-native-by-design.png",videoUrl:"",link:"https://www.lutron.com/us/en/partnerships/native-by-design"},
+      {type:"video",title:"Ketra",brand:"Lutron",description:"The most innovative light source since the filament bulb — natural white light from 1,400K–10,000K with Vibrancy color rendering and Color Lock consistency for life.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-02/ketra.jpg",videoUrl:"https://www.youtube-nocookie.com/embed/K-Jq5YdwMQs",link:"https://www.lutron.com/us/en/lighting/ketra"},
+      {type:"image",title:"Rania",brand:"Lutron",description:"Exceptional, natural-feeling light for high-craft lamps and luminaires — designed to feel more true-to-life than tunable white and warm dim. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/lighting/rania"},
+      {type:"image",title:"Orluna (Lutron Partner)",brand:"Orluna",description:"Beautifully engineered LED downlights, uplights, spots and linear fixtures — a beautiful lit effect, now aligned with Lutron. Image to be supplied.",image:"",videoUrl:"",link:"https://www.orluna.com/news/lutron-orluna-announcement"}
+    ]
+  },
+  {
+    id:"shades", label:"Shades", title:"Shades",
+    intro:"Whisper-quiet motorized shading and drapery — light, privacy and glare, choreographed with the lighting scenes.",
+    items:[
+      {type:"image",title:"Palladiom Roller Shades",brand:"Lutron",description:"A celebration of craft and material — Palladiom shading brings architectural precision and refined hardware to roller shades.",image:"https://www.lutron.com/us/sites/hub_americas/files/styles/content_two_thirds_desktop_medium_2x/public/2024-11/sitting-area-blackrock-eric-laignel-45.jpg",videoUrl:"",link:"https://www.lutron.com/us/en/window-treatments/shades/palladiom-roller-shades"},
+      {type:"image",title:"Sivoia QS Roller Shades",brand:"Lutron",description:"A comprehensive selection for custom installations, with Lutron's signature quiet, precise, perfectly aligned movement.",image:"https://www.lutron.com/us/sites/hub_americas/files/styles/cards_landscape_2_wide_desktop_narrow_2x/public/2024-12/living-room-shades-linear-lights.jpg",videoUrl:"",link:"https://www.lutron.com/us/en/window-treatments/shades/sivoia-roller-shades"},
+      {type:"image",title:"Triathlon Roller Shades",brand:"Lutron",description:"Pro-grade, wire-free battery shades for elegant retrofits — full Lutron control without new wiring. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/window-treatments/shades/triathlon-roller-shades"},
+      {type:"image",title:"Palladiom Drapery",brand:"Lutron",description:"Automated drapery track that draws fabric with quiet precision — a softer architectural line, on scene. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/window-treatments/drapery/palladiom-drapery"},
+      {type:"image",title:"Sivoia QS Drapery",brand:"Lutron",description:"Comprehensive motorized drapery for custom installations — smooth, silent, and integrated with the whole-home system. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/window-treatments/drapery/sivoia-drapery"}
+    ]
+  },
+  {
+    id:"outdoor-audio", label:"Outdoor Audio", title:"Outdoor Audio",
+    intro:"Landscape and terrace sound — full-range performance that disappears into the garden and carries across the grounds.",
+    items:[
+      {type:"image",title:"Design Audio Systems",brand:"Magna Áudio",description:"Sculptural, hand-built speakers that integrate architecture, lighting and high-performance sound — including the concrete Brutalist outdoor series.",image:"https://static.wixstatic.com/media/b5cc20_e3357730ecfa4a4ebfce1fafb2cd129b~mv2.jpg/v1/fill/w_2500,h_1667,al_c/b5cc20_e3357730ecfa4a4ebfce1fafb2cd129b~mv2.jpg",videoUrl:"",link:"https://www.magnaaudio.com/"},
+      {type:"video",title:"High-Performance Outdoor Audio",brand:"Coastal Source",description:"The highest-fidelity outdoor speakers on the market — purpose-built for the outdoors and joined by the bulletproof, waterproof Coastal Connector system.",image:"https://coastalsource.com/wp-content/uploads/2024/11/Own-The-Backyard-for-WEBSITE.jpg",videoUrl:"https://coastalsource.com/wp-content/uploads/2024/05/coastal_source_lifestyle_video_header-1080p_REV2.mp4",link:"https://coastalsource.com/outdoor-audio/"}
+    ]
+  },
+  {
+    id:"outdoor-lighting", label:"Outdoor Lighting", title:"Outdoor Lighting",
+    intro:"Landscape and facade lighting — grazing, path and accent light that renders the architecture and grounds after dark.",
+    items:[
+      {type:"video",title:"Luxury Landscape Lighting",brand:"Coastal Source",description:"Solid cast-brass fixtures with efficient CREE LEDs and the Plug+Play™ IP68 connector system — landscape lighting built to defy the elements and last a lifetime.",image:"https://coastalsource.com/wp-content/uploads/2022/11/VillaSplendida-TOL-sequence-2-UPLIGHTING-1536x1024.jpg",videoUrl:"https://www.youtube.com/watch?v=5pBv4qGwv18",link:"https://coastalsource.com/outdoor-lighting/"},
+      {type:"image",title:"Landscape & Architectural Lighting",brand:"FX Luminaire",description:"Integrated-LED landscape and architectural fixtures with the Luxor control system — digital zoning, dimming, and 30,000 colors across the grounds.",image:"https://www.fxl.com/sites/fxl.com/files/styles/colorbox_image/public/image_library/geneva_ridge_54.jpg",videoUrl:"",link:"https://www.fxl.com/"}
+    ]
+  },
+  {
+    id:"outdoor-tv", label:"Outdoor TV", title:"Outdoor TV",
+    intro:"All-weather displays — full-brightness screens for terrace, loggia and poolside, readable in direct sun.",
+    items:[
+      {type:"image",title:"SPT Extreme Patio Theater",brand:"Stealth Acoustics",description:"A retractable outdoor LED TV in screen sizes up to 190\" at 4,000 nits — rises for the show, then disappears into a cabinet that can recess into the landscape.",image:"https://www.stealthacoustics.com/wp-content/uploads/2023/09/SPT-Main-Header-2023.png",videoUrl:"",link:"https://www.stealthacoustics.com/patio-theater/sptv1-extreme/"},
+      {type:"image",title:"C SEED N1 Outdoor",brand:"C SEED",description:"A sculptural monolith that unfolds into a 4K MicroLED screen in 60 seconds — 4,000 nits, IP65-rated, and rotating up to 180° for terraces and poolside. Image to be supplied.",image:"",videoUrl:"",link:"https://www.cseed.com/en/outdoor-tv/c-seed-n1.html"}
+    ]
+  },
+  {
+    id:"tvs", label:"TVs", title:"TVs",
+    intro:"Interior displays — reference OLED and MicroLED, art-mode canvases, and screens that vanish into the architecture.",
+    items:[
+      {type:"video",title:"Moving Art Screens",brand:"Media Décor by Leon",description:"At the touch of a button, museum-quality giclée artwork conceals any TV — scrolling on near-silent Lutron motors for TVs up to 120\".",image:"https://mediadecor.com/wp-content/uploads/2017/02/Elite-Moving-Art-Screen.png",videoUrl:"https://www.youtube.com/watch?v=0xNoQyUmyGE",link:"https://mediadecor.com/product-category/moving-art-screens/"},
+      {type:"image",title:"Premium OLED — Stellar",brand:"Loewe",description:"Made-in-Germany flagship OLED televisions up to 97\" — pre-calibrated 4K, Dolby Vision, and integrated high-output sound, with craft and design to match.",image:"https://www.loewe.tv/Images/TV/stellar/EU/stellar97/54961/image-thumb__54961__image-square-960/stellar-97-v1-_1920%20x%201920_02%20%281%29_1.png",videoUrl:"",link:"https://www.loewe.tv/na/en/loewe/tv/all-tv"},
+      {type:"image",title:"The Unfolding TV",brand:"C SEED",description:"The world's largest luxury indoor & outdoor 4K MicroLED televisions — unfolding sculptures including the N1, M1 and Blade. Image to be supplied.",image:"",videoUrl:"",link:"https://www.cseed.com/"}
+    ]
+  },
+  {
+    id:"whole-home-audio", label:"Whole-Home Audio", title:"Whole-Home Audio",
+    intro:"Multi-room music — architectural in-wall and in-ceiling speakers, every room a zone, one seamless system.",
+    items:[
+      {type:"image",title:"Invisible Speakers — LineaRadiance",brand:"Stealth Acoustics",description:"Truly invisible speakers that plaster directly into the wall or ceiling and disappear — high-fidelity sound with no visible grille, anywhere in the home.",image:"https://www.stealthacoustics.com/wp-content/uploads/2025/09/header-LineaRadiance-Speakers.jpg",videoUrl:"",link:"https://www.stealthacoustics.com/invisible-speakers/"},
+      {type:"image",title:"Ci Special Applications",brand:"KEF",description:"Flush-mount, ultra-low-profile architectural speakers — discreet by design, with KEF's Uni-Q performance for even, room-filling sound.",image:"https://us.kef.com/cdn/shop/collections/Hero_DT_1440x810_9.jpg?v=1783071878",videoUrl:"",link:"https://us.kef.com/collections/special-applications"},
+      {type:"image",title:"Residential & Yacht",brand:"K-array",description:"Slim-profile architectural loudspeakers — Lyzard, Vyper, Kobra and Python — with controlled dispersion and scalable multi-room DSP for luxury interiors. Image to be supplied.",image:"",videoUrl:"",link:"https://www.k-array.com/en/applications/residential-yacht"},
+      {type:"image",title:"Streaming & Architectural",brand:"Sonos",description:"Whole-home wireless streaming with room grouping, plus Sonos Architectural by Sonance in-wall, in-ceiling and outdoor speakers. Image to be supplied.",image:"",videoUrl:"",link:"https://www.sonos.com/en-us/shop"}
+    ]
+  },
+  {
+    id:"control-devices", label:"Control Devices", title:"Control Devices",
+    intro:"The interface — engraved keypads, touch panels, voice and remotes that make an intricate system feel effortless.",
+    items:[
+      {type:"image",title:"Palladiom Keypads",brand:"Lutron",description:"Sculpted metal keypads designed from the outside in — a beautiful, intuitive, tactile control that reads as architecture, not electronics.",image:"https://www.lutron.com/us/sites/hub_americas/files/styles/content_two_thirds_desktop_medium_2x/public/2024-11/bedroom-with-wallpaper-ritz-tower-palladiom-keypad-with-hand-29.jpg",videoUrl:"",link:"https://www.lutron.com/us/en/controls/keypads-remotes/palladiom"},
+      {type:"image",title:"Alisse Keypads",brand:"Lutron",description:"An elegant, refined keypad for the most considered interiors — jewel-like detailing and a satisfying press. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/controls/keypads-remotes/alisse"},
+      {type:"image",title:"Aviena Keypads",brand:"Lutron",description:"A next-generation keypad line balancing clean design with intuitive, scene-based control. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/controls/keypads-remotes/aviena"},
+      {type:"image",title:"Sunnata Controls",brand:"Lutron",description:"An intuitive touch or swipe sets your lights — a stand-alone control with the polish of the whole-home system. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/controls/keypads-remotes/sunnata"},
+      {type:"image",title:"Pico Remotes",brand:"Lutron",description:"The versatile Pico remote — handheld, tabletop or wall-mounted control for lights, shades and scenes. Image to be supplied.",image:"",videoUrl:"",link:"https://www.lutron.com/us/en/controls/keypads-remotes/pico"},
+      {type:"video",title:"AI Control for the Smart Home",brand:"Josh.ai",description:"Natural-language AI voice and touch control for the world's most sophisticated homes — private by design, orchestrating light, sound, climate and more.",image:"https://d35408cyocioye.cloudfront.net/marketing/hero-videos/home-hero-video-loop-20260616-poster.png",videoUrl:"https://www.youtube.com/watch?v=HDB0C3wTMwA",link:"https://josh.ai/"},
+      {type:"image",title:"ELAN Control (OS 9)",brand:"ELAN by Nice",description:"Award-winning whole-home control — intelligent touch panels, the HR40 handheld remote, and a natively integrated natural-language voice assistant. Image to be supplied.",image:"",videoUrl:"",link:"https://www.niceforyou.com/na/solutions/control-systems"},
+      {type:"image",title:"iPad Enclosures & Docks",brand:"IPORT",description:"Enterprise-grade iPad wall stations, mounts and PoE charging docks — a clean, always-on in-wall control surface for the home. Image to be supplied.",image:"https://cdn.shopify.com/s/files/1/0666/5764/8870/files/Iport-new-image.jpg?v=1773713322",videoUrl:"",link:"https://iport.io/"}
+    ]
+  },
+  {
+    id:"misc", label:"Misc", title:"Misc",
+    intro:"Everything else worth showing — networking, racks and power that keep an estate-scale system invisible and reliable.",
+    items:[
+      {type:"image",title:"Equipment Rack",brand:"Partner TBD",description:"Placeholder — a tidy, serviceable equipment rack for the system core. Add a partner link and reference imagery.",image:"",videoUrl:"",link:"",placeholder:true},
+      {type:"image",title:"Network & Wi-Fi",brand:"Partner TBD",description:"Placeholder — enterprise-grade networking for full-estate coverage. Add a partner product page and imagery.",image:"",videoUrl:"",link:"",placeholder:true}
+    ]
+  }
+];
+
+/* ============================================================
+   RENDERING — no need to edit below this line
+   ============================================================ */
+
+function videoEmbed(url){
+  if(!url) return null;
+  let m = url.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([\w-]{11})/);
+  if(m) return {kind:"iframe",src:`https://www.youtube-nocookie.com/embed/${m[1]}?autoplay=1&rel=0&modestbranding=1`};
+  m = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+  if(m) return {kind:"iframe",src:`https://player.vimeo.com/video/${m[1]}?autoplay=1&title=0&byline=0&portrait=0`};
+  if(/\.(mp4|webm|mov)(\?|$)/i.test(url)) return {kind:"file",src:url};
+  return {kind:"iframe",src:url};
+}
+
+function iconImage(){return '<div class="fi">&#9646;</div>';}
+function iconVideo(){return '<div class="fi">&#9655;</div>';}
+
+function mediaFallback(img,type){
+  const m=img.closest('.card-media'); if(!m) return;
+  const lbl = type==='video' ? 'Video Placeholder' : 'Image Placeholder';
+  const icon = type==='video' ? iconVideo() : iconImage();
+  const fb=document.createElement('div'); fb.className='media-fallback';
+  fb.innerHTML = icon + '<span>'+lbl+'</span>';
+  m.insertBefore(fb, m.firstChild);
+  img.remove();
+}
+
+function mediaHTML(item){
+  const embed = item.type==="video" ? videoEmbed(item.videoUrl) : null;
+  const hasImg = item.image && item.image.trim()!=="";
+  let inner = "";
+
+  if(item.type==="video"){
+    const poster = hasImg
+      ? `<img src="${item.image}" alt="${escapeAttr(item.title)}" onerror="this.remove()">`
+      : `<div class="media-fallback">${iconVideo()}<span>Video Placeholder</span></div>`;
+    const cover = embed
+      ? `<div class="video-cover" onclick="playVideo(this)"><div class="ring"><div class="tri"></div></div></div>`
+      : `<div class="video-cover" style="cursor:default"><div class="ring" style="opacity:.5"><div class="tri"></div></div></div>`;
+    inner = `<span class="play-badge"><span class="tri"></span>Video</span>${poster}${cover}`;
+  } else {
+    inner = hasImg
+      ? `<img src="${item.image}" alt="${escapeAttr(item.title)}" onerror="mediaFallback(this,'image')">`
+      : `<div class="media-fallback">${iconImage()}<span>Image Placeholder</span></div>`;
+  }
+
+  const flag = item.placeholder ? `<span class="placeholder-flag">Placeholder</span>` : "";
+  return `<div class="card-media" data-embed='${embed?JSON.stringify(embed):""}'>${inner}${flag}</div>`;
+}
+
+function cardHTML(item){
+  const link = item.link && item.link.trim()!==""
+    ? `<a class="card-link" href="${item.link}" target="_blank" rel="noopener">Explore <span class="arrow">&rarr;</span></a>`
+    : `<span class="card-link disabled">Link pending</span>`;
+  const brand = item.brand ? `<div class="card-brand">${escapeHTML(item.brand)}</div>` : "";
+  return `
+    <article class="card">
+      ${mediaHTML(item)}
+      <div class="card-body">
+        ${brand}
+        <h3 class="card-title">${escapeHTML(item.title)}</h3>
+        <p class="card-desc">${escapeHTML(item.description||"")}</p>
+        <div class="card-foot">${link}</div>
+      </div>
+    </article>`;
+}
+
+function renderCategory(cat){
+  const content = document.getElementById("content");
+  const cards = cat.items.length
+    ? cat.items.map(it=>cardHTML(it)).join("")
+    : `<div class="empty-note">No concepts added yet for ${escapeHTML(cat.label)}.</div>`;
+  content.innerHTML = `
+    <div class="cat-head">
+      <span class="eyebrow">Concepts</span>
+      <h2>${escapeHTML(cat.title)}</h2>
+      <p>${escapeHTML(cat.intro)}</p>
+    </div>
+    <div class="grid">${cards}</div>`;
+  const cardEls = content.querySelectorAll(".card");
+  if(!("IntersectionObserver" in window)){
+    cardEls.forEach(c=>c.classList.add("in")); return;
+  }
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}});
+  },{threshold:.08});
+  cardEls.forEach((c,i)=>{c.style.transitionDelay=(Math.min(i,6)*60)+"ms";io.observe(c);});
+  // Failsafe: if anything prevents the observer from firing, reveal after 1.2s
+  setTimeout(()=>cardEls.forEach(c=>c.classList.add("in")),1200);
+}
+
+function playVideo(coverEl){
+  const media = coverEl.closest(".card-media");
+  const embed = JSON.parse(media.getAttribute("data-embed"));
+  if(!embed) return;
+  media.querySelectorAll("img,.media-fallback,.video-cover,.play-badge").forEach(el=>el.remove());
+  if(embed.kind==="iframe"){
+    media.innerHTML = `<iframe src="${embed.src}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>`;
+  } else {
+    media.innerHTML = `<video src="${embed.src}" controls autoplay playsinline></video>`;
+  }
+}
+
+function buildTabs(){
+  document.getElementById("tabs").innerHTML =
+    LOOMIS.map(c=>`<button class="tab" data-id="${c.id}" onclick="selectTab('${c.id}')">${escapeHTML(c.label)}</button>`).join("");
+}
+
+function selectTab(id,scroll=true){
+  const cat = LOOMIS.find(c=>c.id===id) || LOOMIS[0];
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.id===cat.id));
+  renderCategory(cat);
+  if(location.hash!=="#"+cat.id) history.replaceState(null,"","#"+cat.id);
+  if(scroll){
+    const y = document.getElementById("navwrap").offsetTop - 60;
+    if(window.scrollY < y) window.scrollTo({top:y,behavior:"smooth"});
+  }
+}
+
+function goHome(){window.scrollTo({top:0,behavior:"smooth"});}
+
+function applyLogo(){
+  if(BLS_LOGO && BLS_LOGO.trim()!==""){
+    const b=document.getElementById("brand");
+    b.innerHTML = `<img class="logo-img" src="${BLS_LOGO}" alt="Better Living Systems"><div><div class="sub" style="margin-top:0">Loomis · Concept Lookbook</div></div>`;
+  }
+}
+
+function escapeHTML(s){return (s||"").replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function escapeAttr(s){return (s||"").replace(/["&<>]/g,c=>({'"':'&quot;','&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+window.addEventListener("scroll",()=>{
+  document.getElementById("topbar").classList.toggle("solid",window.scrollY>60);
+},{passive:true});
+
+applyLogo();
+buildTabs();
+const start = (location.hash||"").replace("#","");
+selectTab(LOOMIS.some(c=>c.id===start)?start:LOOMIS[0].id,false);
+</script>
+</body>
+</html>
