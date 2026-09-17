@@ -190,9 +190,41 @@
     .grid{grid-template-columns:1fr}
     .hero h1{font-size:clamp(72px,26vw,120px)}
   }
+
+  /* ---- Login gate ---- */
+  .gate{position:fixed;inset:0;z-index:10000;background:radial-gradient(circle at 50% 32%,#0d0d0c,#060605 72%);display:flex;align-items:center;justify-content:center;padding:24px}
+  .gate.hidden{display:none}
+  .gate-inner{width:100%;max-width:360px;text-align:center}
+  .gate-presents{font-family:var(--sans);font-size:11px;font-weight:400;letter-spacing:.4em;text-transform:uppercase;color:var(--ivory-dim);margin-bottom:20px}
+  .gate-mark{font-family:var(--serif);font-weight:400;font-size:72px;line-height:1;color:var(--ivory);margin:0}
+  .gate-mark .i{font-style:italic;color:var(--accent-soft)}
+  .gate-kicker{font-family:var(--sans);font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--ivory-dim);margin-top:16px}
+  .gate-form{margin-top:40px;display:flex;flex-direction:column;gap:14px}
+  .gate-input{background:rgba(255,255,255,.04);border:1px solid rgba(217,210,196,.22);color:var(--ivory);font-family:var(--sans);font-size:14px;letter-spacing:.04em;padding:14px 16px;border-radius:2px;outline:none;transition:border-color .2s}
+  .gate-input::placeholder{color:rgba(217,210,196,.5);letter-spacing:.14em;text-transform:uppercase;font-size:11px}
+  .gate-input:focus{border-color:var(--accent)}
+  .gate-btn{margin-top:8px;background:var(--accent);color:#060605;font-family:var(--sans);font-weight:500;font-size:11px;letter-spacing:.28em;text-transform:uppercase;padding:14px;border:none;border-radius:2px;cursor:pointer;transition:background .2s}
+  .gate-btn:hover{background:var(--accent-soft)}
+  .gate-err{min-height:16px;font-family:var(--sans);font-size:11px;letter-spacing:.06em;color:#cf9182;opacity:0;transition:opacity .2s}
+  .gate-err.show{opacity:1}
+  body.locked{overflow:hidden}
 </style>
 </head>
 <body>
+
+  <div id="gate" class="gate" role="dialog" aria-modal="true" aria-label="Login">
+    <div class="gate-inner">
+      <div class="gate-presents">Better Living Systems</div>
+      <h1 class="gate-mark">LOOM<span class="i">I</span>S</h1>
+      <div class="gate-kicker">Private Client Presentation</div>
+      <form id="gateForm" class="gate-form" autocomplete="off">
+        <input type="text" id="gateUser" class="gate-input" placeholder="Username" autocomplete="off" spellcheck="false">
+        <input type="password" id="gatePass" class="gate-input" placeholder="Password" autocomplete="off">
+        <button type="submit" class="gate-btn">Login</button>
+        <div id="gateErr" class="gate-err" aria-live="polite"></div>
+      </form>
+    </div>
+  </div>
 
   <header class="topbar" id="topbar">
     <div class="brand" onclick="goHome()">
@@ -266,8 +298,8 @@ const LOOMIS = [
     intro:"Purpose-built cinema — reference-grade loudspeakers, bespoke seating, and rooms designed around a single perfect sightline.",
     items:[
       {type:"image",title:"Extreme Home Theatre",brand:"KEF",description:"THX-Certified Dominus & Ultra architectural speaker systems engineered for breathtakingly realistic, fully immersive cinematic sound — just as the director intended.",image:"https://us.kef.com/cdn/shop/collections/Hero_DT_1440x810_4.jpg?v=1783071876",videoUrl:"",link:"https://us.kef.com/collections/extreme-home-theatre"},
-      {type:"image",title:"Cinema Seating",brand:"CinemaTech",description:"Bespoke luxury home-theater seating — hand-built, motorized, and upholstered to the room. Image to be supplied.",image:"",videoUrl:"",link:"https://cinematech.com/"},
-      {type:"image",title:"Theater Design & Screens",brand:"CinemaTech",description:"Turnkey private cinema design — acoustically engineered rooms and reference screens tailored to the space. Image to be supplied.",image:"",videoUrl:"",link:"https://cinematech.com/"},
+      {type:"image",title:"Cinema Seating",brand:"CinemaTech",description:"Bespoke luxury home-theater seating — hand-built in Germany, motorized, and upholstered to the room in aniline leathers, Loro Piana wools and Alcantara.",image:"https://www.mycinematech.com/wp-content/uploads/2024/10/Estrella.png",videoUrl:"",link:"https://www.mycinematech.com/home-theater-seating/"},
+      {type:"image",title:"Theater Design & Screens",brand:"CinemaTech",description:"Turnkey private cinema design — acoustically engineered rooms, bespoke millwork and reference screens tailored end-to-end to the space.",image:"https://www.mycinematech.com/wp-content/uploads/2025/10/Theater-5049-3_Updated.webp",videoUrl:"",link:"https://www.mycinematech.com/"},
       {type:"image",title:"MicroLED Video Wall",brand:"AWALL",description:"Award-winning CoB MicroLED walls engineered for the reference theater — seamless, bezel-free direct-view LED at true cinema scale, tuned for a dark room.",image:"https://awall.com/cdn/shop/files/e3ecd402-572e-4e14-b33c-c361ac147ad2.png?v=1783609102&width=1600",videoUrl:"",link:"https://awall.com/"},
       {type:"image",title:"XWALL Projector Cinema",brand:"AWALL",description:"A cinematic projector-format home cinema — the XWALL delivers a true theatrical screen and a big-room picture for the dedicated theater.",image:"https://awall.com/cdn/shop/files/HomeCinema2.png?v=1787593408&width=2400",videoUrl:"",link:"https://awall.com/pages/x"}
     ]
@@ -315,7 +347,7 @@ const LOOMIS = [
     intro:"All-weather displays — full-brightness screens for terrace, loggia and poolside, readable in direct sun.",
     items:[
       {type:"image",title:"SPT Extreme Patio Theater",brand:"Stealth Acoustics",description:"A retractable outdoor LED TV in screen sizes up to 190\" at 4,000 nits — rises for the show, then disappears into a cabinet that can recess into the landscape.",image:"https://www.stealthacoustics.com/wp-content/uploads/2023/09/SPT-Main-Header-2023.png",videoUrl:"",link:"https://www.stealthacoustics.com/patio-theater/sptv1-extreme/"},
-      {type:"image",title:"C SEED N1 Outdoor",brand:"C SEED",description:"A sculptural monolith that unfolds into a 4K MicroLED screen in 60 seconds — 4,000 nits, IP65-rated, and rotating up to 180° for terraces and poolside. Image to be supplied.",image:"",videoUrl:"",link:"https://www.cseed.com/en/outdoor-tv/c-seed-n1.html"},
+      {type:"image",title:"C SEED N1 Outdoor",brand:"C SEED",description:"A sculptural monolith that unfolds into a 4K MicroLED screen in 60 seconds — 4,000 nits, IP65-rated, and rotating up to 180° for terraces and poolside.",image:"https://www.cseed.com/xstorage/1/_cache/20251217/N1_startseite_doppel_4413_1_f70a1b6059c2b888b711a0096b94ace3.webp",videoUrl:"",link:"https://www.cseed.com/en/outdoor-tv/c-seed-n1.html"},
       {type:"image",title:"SPT Megalith Outdoor TV",brand:"Stealth Acoustics",description:"The modular Megalith outdoor LED TV in seven sizes and P1.95–P4 pixel pitch — wall-mounted or free-standing with an optional 3.1 sound bar, built for full-brightness viewing in direct sun.",image:"https://www.stealthacoustics.com/wp-content/uploads/2022/05/SPT-Model-SPTV3-Header.jpg",videoUrl:"",link:"https://www.stealthacoustics.com/patio-theater/sptv3-megalith/"}
     ]
   },
@@ -360,7 +392,7 @@ const LOOMIS = [
       {type:"image",title:"Equipment Rack",brand:"Salamander Designs",description:"Floor-standing Archetype audio racks — modular, open-frame racks that organize, cool and service the system core with a clean, upright profile.",image:"https://salamanderdesigns.canto.com/direct/image/ceu8ge03412f5f1c9dq1go7a2q/z4BqJzat9lM1zO6CS89uC-MLi38/original?content-type=image%2Fjpeg&name=audio-stands-archetype-a5-b-product01.jpg",videoUrl:"",link:"https://www.salamanderdesigns.com/residential/audio-racks-stands/"},
       {type:"image",title:"Motion Sensors & Controls",brand:"Faradite",description:"Minimalist dry-contact motion sensors and controls that integrate cleanly with Lutron, Control4, Crestron and Savant — discreet automation triggers with a refined faceplate.",image:"https://us.faradite.com/cdn/shop/files/Faradite_Social_1200x1202.png?v=1613620005",videoUrl:"",link:"https://us.faradite.com"},
       {type:"image",title:"Flush-Mount In-Wall Enclosures",brand:"Wall-Smart",description:"Seamless plaster-in enclosures that recess Ubiquiti UniFi access points and devices flush into the wall — the technology disappears into the architecture.",image:"https://www.wall-smart.com/uploads/2/4/1/6/24165207/083-1-981-p09.jpg",videoUrl:"",link:"https://www.wall-smart.com/uni-inwall.html"},
-      {type:"image",title:"Network & Wi-Fi",brand:"Partner TBD",description:"Placeholder — enterprise-grade networking for full-estate coverage. Add a partner product page and imagery.",image:"",videoUrl:"",link:"",placeholder:true}
+      {type:"image",title:"Network & Wi-Fi",brand:"Access Networks",description:"Enterprise-grade managed networking engineered for luxury residences — resilient, whole-estate Wi-Fi and wired backbone, the CI-standard for high-performance homes.",image:"https://www.accessnetworks.com/wp-content/uploads/2017/07/AN_homescreen_retouch_1bfa796e07c1cdc71038be528f602782.jpg",videoUrl:"",link:"https://www.accessnetworks.com/"}
     ]
   }
 ];
@@ -504,6 +536,37 @@ applyLogo();
 buildTabs();
 const start = (location.hash||"").replace("#","");
 selectTab(LOOMIS.some(c=>c.id===start)?start:LOOMIS[0].id,false);
+
+/* ---- Login gate (client-side soft lock; not real security) ---- */
+function loomisUnlock(){
+  var g=document.getElementById("gate");
+  if(g) g.classList.add("hidden");
+  document.body.classList.remove("locked");
+}
+(function initGate(){
+  var gate=document.getElementById("gate");
+  var form=document.getElementById("gateForm");
+  var pass=document.getElementById("gatePass");
+  var user=document.getElementById("gateUser");
+  var err=document.getElementById("gateErr");
+  if(!gate||!form){ return; }
+  var unlocked=false; try{ unlocked=sessionStorage.getItem("loomis_unlocked")==="1"; }catch(e){}
+  if(unlocked){ loomisUnlock(); return; }
+  document.body.classList.add("locked");
+  form.addEventListener("submit",function(ev){
+    ev.preventDefault();
+    if(pass.value==="1111"){
+      try{ sessionStorage.setItem("loomis_unlocked","1"); }catch(e){}
+      loomisUnlock();
+    } else {
+      err.textContent="Incorrect password. Please try again.";
+      err.classList.add("show");
+      pass.value=""; pass.focus();
+    }
+  });
+  pass.addEventListener("input",function(){ err.classList.remove("show"); });
+  setTimeout(function(){ (user||pass).focus(); },60);
+})();
 </script>
 </body>
 </html>
