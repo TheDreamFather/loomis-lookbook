@@ -6,13 +6,14 @@
 <title>LOOMIS — Better Living Systems · Concept Lookbook</title>
 <meta name="description" content="Better Living Systems presents the Loomis concept lookbook — cinema, light, sound and control, curated for a singular residence.">
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://lookbook.salesbetterliving.com/">
 <meta property="og:title" content="LOOMIS — Better Living Systems · Concept Lookbook">
 <meta property="og:description" content="Better Living Systems presents the Loomis concept lookbook — cinema, light, sound and control, curated for a singular residence.">
-<meta property="og:image" content="https://loomis.salesbetterliving.com/assets/cseed-fuchsia.jpg">
+<meta property="og:image" content="https://lookbook.salesbetterliving.com/assets/cseed-fuchsia.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="LOOMIS — Better Living Systems · Concept Lookbook">
 <meta name="twitter:description" content="Better Living Systems presents the Loomis concept lookbook — cinema, light, sound and control, curated for a singular residence.">
-<meta name="twitter:image" content="https://loomis.salesbetterliving.com/assets/cseed-fuchsia.jpg">
+<meta name="twitter:image" content="https://lookbook.salesbetterliving.com/assets/cseed-fuchsia.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500&display=swap" rel="stylesheet">
@@ -211,6 +212,64 @@
   .card-media.fit-contain{background:#0c0c0b}
   .card-media.fit-contain img{object-fit:contain;filter:none}
   .card:hover .card-media.fit-contain img{transform:none;filter:saturate(1) brightness(1)}
+
+  /* ---------- Previous Projects dropdown (nav) ---------- */
+  .tab.has-menu{display:inline-flex;align-items:center;gap:8px}
+  .tab .caret{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-top:5px solid currentColor;opacity:.75;transition:transform .3s ease}
+  .dd{position:relative;flex:0 0 auto}
+  .dd.open .caret{transform:rotate(180deg)}
+  /* menu is appended to <body> and fixed-positioned so the nav's overflow can't clip it */
+  .dd-menu{position:fixed;top:0;left:0;min-width:256px;max-width:min(80vw,340px);z-index:200;
+    background:rgba(10,10,9,.98);backdrop-filter:blur(16px);border:1px solid var(--line);
+    box-shadow:0 30px 70px -24px rgba(0,0,0,.95);
+    opacity:0;visibility:hidden;transform:translateY(-8px);transition:opacity .28s ease,transform .28s ease,visibility .28s;padding:8px 0}
+  .dd-menu.open{opacity:1;visibility:visible;transform:none}
+  .dd-item{display:block;width:100%;text-align:left;background:none;border:none;cursor:pointer;color:var(--ivory-dim);
+    font-family:var(--sans);font-size:12px;font-weight:400;letter-spacing:.03em;line-height:1.35;padding:13px 22px;transition:background .25s,color .25s}
+  .dd-item:hover,.dd-item.active{background:rgba(185,154,99,.1);color:var(--accent-soft)}
+  .dd-item .di-sub{display:block;margin-top:3px;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted-2)}
+  .dd-empty{padding:14px 22px;color:var(--muted-2);font-size:11px;letter-spacing:.04em}
+
+  /* ---------- Project gallery ---------- */
+  .proj-head{margin-bottom:56px;max-width:900px}
+  .proj-head .eyebrow{font-size:10.5px;letter-spacing:.48em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:22px}
+  .proj-head h2{font-family:var(--serif);font-weight:400;font-size:clamp(48px,8vw,104px);line-height:.96;letter-spacing:.02em;color:var(--ivory)}
+  .proj-head .psub{margin-top:22px;color:var(--muted);font-size:16px;max-width:640px;line-height:1.95}
+  .proj-flag{display:inline-block;margin-bottom:22px;background:rgba(6,6,5,.66);border:1px dashed var(--line);border-radius:100px;
+    padding:6px 15px;font-size:8.5px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted)}
+  .hint{display:inline-flex;align-items:center;gap:9px;margin:6px 0 40px;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  .hint .hdot{width:11px;height:11px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px rgba(185,154,99,.18);flex:0 0 auto}
+  .gallery{display:flex;flex-direction:column;gap:clamp(28px,4vw,56px)}
+  .install-photo{position:relative;background:var(--panel-2);border:1px solid var(--line-soft);overflow:hidden;line-height:0}
+  .install-photo>img{width:100%;height:auto;display:block;filter:saturate(.98) brightness(.97)}
+  .ip-cap{line-height:1.6;padding:16px 20px;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);border-top:1px solid var(--line-soft);background:var(--panel)}
+  .ip-cap .ct{color:var(--muted-2);letter-spacing:.24em;margin-left:8px}
+
+  /* ---------- Hotspots ---------- */
+  .hotspot{position:absolute;transform:translate(-50%,-50%);z-index:5;width:26px;height:26px;cursor:pointer;
+    display:flex;align-items:center;justify-content:center}
+  .hs-dot{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #060605;
+    box-shadow:0 0 0 3px rgba(185,154,99,.35);transition:transform .25s ease,box-shadow .25s ease;position:relative}
+  .hs-dot::after{content:"";position:absolute;inset:-9px;border-radius:50%;border:1px solid rgba(185,154,99,.5);
+    animation:hsPulse 2.4s ease-out infinite}
+  @keyframes hsPulse{0%{transform:scale(.6);opacity:.9}100%{transform:scale(1.5);opacity:0}}
+  .hotspot:hover .hs-dot,.hotspot.show .hs-dot{transform:scale(1.18);box-shadow:0 0 0 5px rgba(185,154,99,.5)}
+  .hs-tip{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%) translateY(6px);
+    min-width:180px;max-width:260px;background:rgba(8,8,7,.97);border:1px solid var(--line);
+    box-shadow:0 20px 50px -18px rgba(0,0,0,.95);padding:13px 15px;text-align:left;line-height:1.5;
+    opacity:0;visibility:hidden;pointer-events:none;transition:opacity .25s ease,transform .25s ease,visibility .25s;z-index:6}
+  .hs-tip::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:6px solid transparent;border-top-color:rgba(8,8,7,.97)}
+  .hotspot:hover .hs-tip,.hotspot.show .hs-tip{opacity:1;visibility:visible;pointer-events:auto;transform:translateX(-50%)}
+  .hs-name{display:block;font-family:var(--sans);font-size:12.5px;font-weight:400;letter-spacing:.02em;color:var(--ivory);text-transform:none}
+  .hs-visit{display:inline-flex;align-items:center;gap:7px;margin-top:9px;font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:var(--accent-soft)}
+  .hs-visit .arrow{transition:transform .35s ease}
+  .hs-visit:hover .arrow{transform:translateX(5px)}
+  .hs-nolink{display:block;margin-top:9px;font-size:9px;letter-spacing:.26em;text-transform:uppercase;color:var(--muted-2)}
+  @media(max-width:640px){
+    .dd-menu{left:0}
+    .hs-tip{min-width:150px}
+  }
 </style>
 </head>
 <body>
@@ -400,6 +459,63 @@ const LOOMIS = [
 ];
 
 /* ============================================================
+   PREVIOUS PROJECTS  ·  finished-install photo galleries
+   ------------------------------------------------------------
+   One object = one closed project shown under the "Previous
+   Projects" dropdown. To ADD A REAL PROJECT:
+
+   1. Commit the install photos into  assets/projects/<your-id>/
+   2. Add an entry below. Remove  placeholder:true  once it's real.
+   3. For each photo, add device HOTSPOTS. The easiest way to get
+      the x/y coordinates is the authoring tool at  /tool.html  —
+      load the photo, click each device, type its name + product
+      link, and copy the generated JSON straight into `hotspots`.
+
+   {
+     id:"unique-id",  title:"Project Name",
+     subtitle:"one line shown under the title",
+     placeholder:true,                 // remove for real projects
+     photos:[
+       {
+         src:"assets/projects/<id>/photo1.jpg",   // hosted image path
+         caption:"Room / area",
+         hotspots:[
+           { x:78, y:45, name:"Device Name", url:"https://product-page" }
+           //  x,y are PERCENTAGES (0–100) from the top-left of the photo
+         ]
+       }
+     ]
+   }
+   ============================================================ */
+
+const PROJECTS = [
+  {
+    id:"sample-estate",
+    title:"Sample Install — Hillside Estate",
+    subtitle:"Placeholder gallery showing the layout. Replace with a real closed project — photos + device tags.",
+    placeholder:true,
+    photos:[
+      {
+        src:"assets/cseed-fuchsia.jpg",
+        caption:"Poolside terrace",
+        hotspots:[
+          {x:79,y:46,name:"C SEED N1 Outdoor TV",url:"https://www.cseed.com/en/outdoor-tv/c-seed-n1.html"},
+          {x:20,y:64,name:"Coastal Source Landscape Audio",url:"https://coastalsource.com/outdoor-audio/"},
+          {x:52,y:30,name:"FX Luminaire Landscape Lighting",url:"https://www.fxl.com/"}
+        ]
+      },
+      {
+        src:"assets/loewe-stellar.jpg",
+        caption:"Media room",
+        hotspots:[
+          {x:50,y:48,name:"Loewe Stellar OLED",url:"https://www.loewe.tv/na/en/loewe/tv/all-tv"}
+        ]
+      }
+    ]
+  }
+];
+
+/* ============================================================
    RENDERING — no need to edit below this line
    ============================================================ */
 
@@ -490,6 +606,58 @@ function renderCategory(cat){
   setTimeout(()=>cardEls.forEach(c=>c.classList.add("in")),1200);
 }
 
+function hotspotHTML(hs){
+  const x = Math.max(0,Math.min(100,Number(hs.x)||0));
+  const y = Math.max(0,Math.min(100,Number(hs.y)||0));
+  const name = escapeHTML(hs.name||"Device");
+  const url = (hs.url||"").trim();
+  const tipLink = url
+    ? `<a class="hs-visit" href="${escapeAttr(url)}" target="_blank" rel="noopener">Visit site <span class="arrow">&#8599;</span></a>`
+    : `<span class="hs-nolink">Link pending</span>`;
+  return `<span class="hotspot" style="left:${x}%;top:${y}%" onclick="toggleHotspot(event,this)" role="button" tabindex="0" aria-label="${escapeAttr(hs.name||'Device')}">
+      <span class="hs-dot"></span>
+      <span class="hs-tip"><span class="hs-name">${name}</span>${tipLink}</span>
+    </span>`;
+}
+
+function installPhotoHTML(photo){
+  const hs = Array.isArray(photo.hotspots) ? photo.hotspots.map(hotspotHTML).join("") : "";
+  const cap = photo.caption
+    ? `<div class="ip-cap">${escapeHTML(photo.caption)}${(photo.hotspots&&photo.hotspots.length)?`<span class="ct">${photo.hotspots.length} tagged device${photo.hotspots.length>1?'s':''}</span>`:""}</div>`
+    : "";
+  const img = photo.src
+    ? `<img src="${escapeAttr(photo.src)}" alt="${escapeAttr(photo.caption||'Install photo')}" onerror="this.style.opacity=.25">`
+    : `<div class="media-fallback" style="position:relative;aspect-ratio:16/9">${iconImage()}<span>Photo Placeholder</span></div>`;
+  return `<figure class="install-photo">${img}${hs}${cap}</figure>`;
+}
+
+function renderProject(proj){
+  const content = document.getElementById("content");
+  const flag = proj.placeholder ? `<span class="proj-flag">Sample · Placeholder</span>` : "";
+  const photos = (proj.photos&&proj.photos.length)
+    ? proj.photos.map(installPhotoHTML).join("")
+    : `<div class="empty-note">No photos added yet for this project.</div>`;
+  const hasHotspots = (proj.photos||[]).some(p=>p.hotspots&&p.hotspots.length);
+  const hint = hasHotspots ? `<div class="hint"><span class="hdot"></span>Hover or tap a marker to see the device &amp; open its product page</div>` : "";
+  content.innerHTML = `
+    <div class="proj-head">
+      ${flag}
+      <span class="eyebrow">Completed Installation</span>
+      <h2>${escapeHTML(proj.title)}</h2>
+      ${proj.subtitle?`<p class="psub">${escapeHTML(proj.subtitle)}</p>`:""}
+    </div>
+    ${hint}
+    <div class="gallery">${photos}</div>`;
+}
+
+function toggleHotspot(ev,el){
+  ev.preventDefault(); ev.stopPropagation();
+  const wasOpen = el.classList.contains("show");
+  document.querySelectorAll(".hotspot.show").forEach(h=>h.classList.remove("show"));
+  if(!wasOpen) el.classList.add("show");
+}
+document.addEventListener("click",e=>{ if(!e.target.closest(".hotspot")) document.querySelectorAll(".hotspot.show").forEach(h=>h.classList.remove("show")); });
+
 function playVideo(coverEl){
   const media = coverEl.closest(".card-media");
   const embed = JSON.parse(media.getAttribute("data-embed"));
@@ -503,15 +671,70 @@ function playVideo(coverEl){
 }
 
 function buildTabs(){
-  document.getElementById("tabs").innerHTML =
-    LOOMIS.map(c=>`<button class="tab" data-id="${c.id}" onclick="selectTab('${c.id}')">${escapeHTML(c.label)}</button>`).join("");
+  const catTabs = LOOMIS.map(c=>`<button class="tab" data-id="${c.id}" onclick="selectTab('${c.id}')">${escapeHTML(c.label)}</button>`).join("");
+  const dropdown = `
+    <div class="dd" id="projDD">
+      <button class="tab has-menu" id="projTab" onclick="toggleProjDD(event)" aria-haspopup="true" aria-expanded="false">Previous Projects<span class="caret"></span></button>
+    </div>`;
+  document.getElementById("tabs").innerHTML = catTabs + dropdown;
+  // Build the menu once and append to <body> so the nav's overflow can't clip it
+  let menu=document.getElementById("projMenu");
+  if(!menu){ menu=document.createElement("div"); menu.id="projMenu"; menu.className="dd-menu"; menu.setAttribute("role","menu"); document.body.appendChild(menu); }
+  menu.innerHTML = PROJECTS.length
+    ? PROJECTS.map(p=>`<button class="dd-item" data-pid="${p.id}" onclick="selectProject('${p.id}')">${escapeHTML(p.title)}${p.subtitle?`<span class="di-sub">${escapeHTML(p.placeholder?'Sample · placeholder':p.subtitle)}</span>`:""}</button>`).join("")
+    : `<div class="dd-empty">No completed projects yet.</div>`;
 }
+
+function positionProjMenu(){
+  const t=document.getElementById("projTab"), m=document.getElementById("projMenu");
+  if(!t||!m) return;
+  const r=t.getBoundingClientRect();
+  const mw=m.offsetWidth||270;
+  let left=r.left;
+  if(left+mw>window.innerWidth-10) left=Math.max(10,window.innerWidth-10-mw);
+  m.style.left=left+"px";
+  m.style.top=r.bottom+"px";
+}
+function toggleProjDD(ev){
+  if(ev) ev.stopPropagation();
+  const dd=document.getElementById("projDD"), m=document.getElementById("projMenu"), t=document.getElementById("projTab");
+  const willOpen=!dd.classList.contains("open");
+  dd.classList.toggle("open",willOpen);
+  if(willOpen){ positionProjMenu(); m.classList.add("open"); } else { m.classList.remove("open"); }
+  t.setAttribute("aria-expanded",willOpen?"true":"false");
+}
+function closeProjDD(){
+  const dd=document.getElementById("projDD"), m=document.getElementById("projMenu"), t=document.getElementById("projTab");
+  if(dd) dd.classList.remove("open");
+  if(m) m.classList.remove("open");
+  if(t) t.setAttribute("aria-expanded","false");
+}
+document.addEventListener("click",e=>{ if(!e.target.closest("#projDD") && !e.target.closest("#projMenu")) closeProjDD(); });
+window.addEventListener("resize",()=>{ const m=document.getElementById("projMenu"); if(m&&m.classList.contains("open")) positionProjMenu(); });
+window.addEventListener("scroll",()=>{ const m=document.getElementById("projMenu"); if(m&&m.classList.contains("open")) closeProjDD(); },{passive:true});
 
 function selectTab(id,scroll=true){
   const cat = LOOMIS.find(c=>c.id===id) || LOOMIS[0];
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.id===cat.id));
+  document.querySelectorAll(".dd-item").forEach(d=>d.classList.remove("active"));
+  const pt=document.getElementById("projTab"); if(pt) pt.classList.remove("active");
   renderCategory(cat);
   if(location.hash!=="#"+cat.id) history.replaceState(null,"","#"+cat.id);
+  if(scroll){
+    const y = document.getElementById("navwrap").offsetTop - 60;
+    if(window.scrollY < y) window.scrollTo({top:y,behavior:"smooth"});
+  }
+}
+
+function selectProject(id,scroll=true){
+  const proj = PROJECTS.find(p=>p.id===id);
+  if(!proj) return;
+  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll(".dd-item").forEach(d=>d.classList.toggle("active",d.dataset.pid===id));
+  const pt=document.getElementById("projTab"); if(pt) pt.classList.add("active");
+  closeProjDD();
+  renderProject(proj);
+  if(location.hash!=="#project-"+id) history.replaceState(null,"","#project-"+id);
   if(scroll){
     const y = document.getElementById("navwrap").offsetTop - 60;
     if(window.scrollY < y) window.scrollTo({top:y,behavior:"smooth"});
@@ -536,8 +759,14 @@ window.addEventListener("scroll",()=>{
 
 applyLogo();
 buildTabs();
-const start = (location.hash||"").replace("#","");
-selectTab(LOOMIS.some(c=>c.id===start)?start:LOOMIS[0].id,false);
+(function routeInitial(){
+  const h = (location.hash||"").replace("#","");
+  if(h.indexOf("project-")===0){
+    const pid = h.slice("project-".length);
+    if(PROJECTS.some(p=>p.id===pid)){ selectProject(pid,false); return; }
+  }
+  selectTab(LOOMIS.some(c=>c.id===h)?h:LOOMIS[0].id,false);
+})();
 
 /* ---- Login gate (client-side soft lock; not real security) ---- */
 function loomisUnlock(){

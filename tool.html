@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>LOOMIS — Hotspot Tagging Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#060605;--bg-2:#0c0c0b;--panel:#0f0f0e;--panel-2:#161614;
+    --ivory:#efe9dd;--ivory-dim:#d9d2c4;--muted:#8c867a;--muted-2:#5c574d;
+    --line:rgba(239,233,221,.14);--line-soft:rgba(239,233,221,.06);
+    --accent:#b99a63;--accent-soft:#cbb488;
+    --serif:'Instrument Serif',Georgia,serif;--sans:'Inter Tight','Helvetica Neue',Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ivory);font-family:var(--sans);font-weight:300;-webkit-font-smoothing:antialiased;line-height:1.6;padding:0 0 80px}
+  a{color:var(--accent-soft);text-decoration:none}
+  header{border-bottom:1px solid var(--line-soft);padding:26px clamp(18px,4vw,48px);display:flex;flex-wrap:wrap;gap:14px 26px;align-items:baseline;justify-content:space-between}
+  header h1{font-family:var(--serif);font-weight:400;font-size:30px;letter-spacing:.02em}
+  header h1 .i{font-style:italic;color:var(--accent-soft)}
+  header .sub{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted)}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 clamp(18px,4vw,48px)}
+  .steps{display:flex;flex-wrap:wrap;gap:10px 26px;margin:26px 0 6px;font-size:12px;color:var(--muted);letter-spacing:.02em}
+  .steps b{color:var(--accent-soft);font-weight:500}
+  .grid{display:grid;grid-template-columns:1.55fr 1fr;gap:clamp(20px,3vw,40px);margin-top:26px;align-items:start}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line-soft);padding:22px}
+  .panel h2{font-family:var(--serif);font-weight:400;font-size:22px;margin-bottom:16px}
+  label{display:block;font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--muted);margin:14px 0 7px}
+  input[type=text],input[type=url],textarea{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(217,210,196,.22);color:var(--ivory);font-family:var(--sans);font-size:13px;letter-spacing:.02em;padding:11px 13px;border-radius:2px;outline:none;transition:border-color .2s}
+  input:focus,textarea:focus{border-color:var(--accent)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .row>div{flex:1;min-width:150px}
+  button.btn{background:var(--accent);color:#060605;font-family:var(--sans);font-weight:500;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;padding:12px 18px;border:none;border-radius:2px;cursor:pointer;transition:background .2s;white-space:nowrap}
+  button.btn:hover{background:var(--accent-soft)}
+  button.ghost{background:none;border:1px solid var(--line);color:var(--ivory-dim)}
+  button.ghost:hover{border-color:var(--accent);color:var(--accent-soft)}
+  .stage-wrap{position:relative;margin-top:8px;background:var(--panel-2);border:1px solid var(--line-soft);min-height:220px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .stage-wrap.empty{padding:60px 20px;text-align:center;color:var(--muted-2);font-size:12px;letter-spacing:.06em}
+  #stage{position:relative;line-height:0;max-width:100%;cursor:crosshair;display:none}
+  #stage img{display:block;max-width:100%;height:auto}
+  .pin{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:grab;z-index:5}
+  .pin.drag{cursor:grabbing}
+  .pin .dot{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #060605;box-shadow:0 0 0 3px rgba(185,154,99,.4);position:relative}
+  .pin .num{position:absolute;top:-7px;right:-9px;background:#060605;border:1px solid var(--accent);color:var(--accent-soft);font-size:9px;line-height:1;border-radius:100px;padding:2px 5px}
+  .pin.sel .dot{box-shadow:0 0 0 5px rgba(185,154,99,.6);transform:scale(1.15)}
+  .hslist{margin-top:6px;display:flex;flex-direction:column;gap:12px}
+  .hsrow{border:1px solid var(--line-soft);background:var(--bg-2);padding:13px 14px}
+  .hsrow.sel{border-color:var(--accent)}
+  .hsrow .hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .hsrow .hd .tag{font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent-soft)}
+  .hsrow .hd .coords{font-size:10px;color:var(--muted-2);letter-spacing:.08em}
+  .hsrow .del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;padding:2px 6px}
+  .hsrow .del:hover{color:#cf9182}
+  .hsrow label{margin:8px 0 5px}
+  .empty-hs{color:var(--muted-2);font-size:12px;letter-spacing:.04em;padding:10px 0}
+  textarea#out{min-height:200px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55;white-space:pre;color:var(--ivory-dim)}
+  .out-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 8px}
+  .out-head span{font-size:9.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--muted)}
+  .note{font-size:12px;color:var(--muted);line-height:1.85;margin-top:14px;border-top:1px solid var(--line-soft);padding-top:16px}
+  .note code{background:rgba(255,255,255,.05);padding:1px 6px;border-radius:2px;color:var(--accent-soft);font-size:11.5px}
+  .copied{color:var(--accent-soft);font-size:10px;letter-spacing:.2em;text-transform:uppercase;opacity:0;transition:opacity .3s}
+  .copied.show{opacity:1}
+</style>
+</head>
+<body>
+  <header>
+    <h1>LOOM<span class="i">I</span>S · Hotspot Tagging Tool</h1>
+    <span class="sub">Internal · tag devices on install photos</span>
+  </header>
+  <div class="wrap">
+    <div class="steps">
+      <span><b>1.</b> Load a photo</span>
+      <span><b>2.</b> Click the photo to drop a pin on each device</span>
+      <span><b>3.</b> Name it + paste its product link</span>
+      <span><b>4.</b> Copy the JSON into the project</span>
+    </div>
+
+    <div class="grid">
+      <div>
+        <div class="panel">
+          <h2>Photo</h2>
+          <label>Load a photo to tag (a local file just previews — it is not uploaded anywhere)</label>
+          <div class="row">
+            <div><input type="file" id="file" accept="image/*" style="padding:9px 0;border:none;background:none"></div>
+          </div>
+          <label>…or load by image URL</label>
+          <div class="row">
+            <div><input type="url" id="url" placeholder="https://… or assets/projects/…/photo1.jpg"></div>
+            <button class="btn" onclick="loadUrl()">Load URL</button>
+          </div>
+          <div class="stage-wrap empty" id="stageWrap">
+            <span id="emptyMsg">Load a photo above, then click on it to place a device pin.</span>
+            <div id="stage"><img id="img" alt=""></div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="panel">
+          <h2>This photo</h2>
+          <label>Final hosted image path (what gets committed &amp; referenced)</label>
+          <input type="text" id="src" placeholder="assets/projects/hillside/photo1.jpg">
+          <label>Caption (room / area)</label>
+          <input type="text" id="caption" placeholder="Poolside terrace">
+
+          <label style="margin-top:20px">Device pins</label>
+          <div class="hslist" id="hslist"><div class="empty-hs">No pins yet — click the photo to add one.</div></div>
+
+          <div class="out-head">
+            <span>JSON for this photo</span>
+            <div style="display:flex;gap:10px;align-items:center">
+              <span class="copied" id="copied">Copied</span>
+              <button class="btn" onclick="copyOut()">Copy</button>
+              <button class="ghost btn" onclick="resetAll()">Reset</button>
+            </div>
+          </div>
+          <textarea id="out" readonly spellcheck="false"></textarea>
+
+          <div class="note">
+            Paste the copied object into the <code>photos:[ ]</code> array of a project in
+            <code>index.html</code> (under <code>const PROJECTS</code>). Repeat for each photo.
+            Coordinates are percentages, so they stay correct at any screen size.
+            <br><br>Tip: set the <b>Final hosted image path</b> to where you'll commit the photo
+            (e.g. <code>assets/projects/&lt;project&gt;/&lt;file&gt;.jpg</code>) so the JSON is ready to use as-is.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  let hotspots = [];   // {x,y,name,url}
+  let selected = -1;
+  let imgLoaded = false;
+
+  const stage=document.getElementById("stage");
+  const stageWrap=document.getElementById("stageWrap");
+  const img=document.getElementById("img");
+  const emptyMsg=document.getElementById("emptyMsg");
+  const srcInput=document.getElementById("src");
+
+  document.getElementById("file").addEventListener("change",e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    const u=URL.createObjectURL(f);
+    setImage(u);
+    // suggest a src path from the filename
+    if(!srcInput.value) srcInput.value="assets/projects/<project>/"+f.name;
+  });
+
+  function loadUrl(){
+    const u=document.getElementById("url").value.trim();
+    if(!u) return;
+    setImage(u);
+    if(!srcInput.value) srcInput.value=u;
+  }
+
+  function setImage(u){
+    img.onload=()=>{ imgLoaded=true; stage.style.display="block"; stageWrap.classList.remove("empty"); emptyMsg.style.display="none"; render(); };
+    img.onerror=()=>{ emptyMsg.textContent="Couldn't load that image. Check the URL / file."; emptyMsg.style.display="block"; };
+    img.src=u;
+  }
+
+  stage.addEventListener("click",e=>{
+    if(!imgLoaded) return;
+    if(e.target.closest(".pin")) return; // don't add when clicking an existing pin
+    const r=img.getBoundingClientRect();
+    const x=+(( (e.clientX-r.left)/r.width)*100).toFixed(1);
+    const y=+(( (e.clientY-r.top)/r.height)*100).toFixed(1);
+    hotspots.push({x:clamp(x),y:clamp(y),name:"",url:""});
+    selected=hotspots.length-1;
+    render(); focusRow(selected);
+  });
+
+  function clamp(n){return Math.max(0,Math.min(100,n));}
+
+  // drag pins
+  let dragI=-1;
+  function startDrag(e,i){ e.preventDefault(); e.stopPropagation(); dragI=i; selected=i; render();
+    window.addEventListener("mousemove",onDrag); window.addEventListener("mouseup",endDrag);
+    window.addEventListener("touchmove",onDrag,{passive:false}); window.addEventListener("touchend",endDrag);
+  }
+  function onDrag(e){ if(dragI<0) return; if(e.cancelable)e.preventDefault();
+    const p=e.touches?e.touches[0]:e; const r=img.getBoundingClientRect();
+    hotspots[dragI].x=+clamp(((p.clientX-r.left)/r.width)*100).toFixed(1);
+    hotspots[dragI].y=+clamp(((p.clientY-r.top)/r.height)*100).toFixed(1);
+    render();
+  }
+  function endDrag(){ dragI=-1;
+    window.removeEventListener("mousemove",onDrag); window.removeEventListener("mouseup",endDrag);
+    window.removeEventListener("touchmove",onDrag); window.removeEventListener("touchend",endDrag);
+  }
+
+  function render(){
+    // pins
+    stage.querySelectorAll(".pin").forEach(p=>p.remove());
+    hotspots.forEach((h,i)=>{
+      const pin=document.createElement("div");
+      pin.className="pin"+(i===selected?" sel":"");
+      pin.style.left=h.x+"%"; pin.style.top=h.y+"%";
+      pin.innerHTML='<span class="dot"></span><span class="num">'+(i+1)+'</span>';
+      pin.addEventListener("mousedown",e=>startDrag(e,i));
+      pin.addEventListener("touchstart",e=>startDrag(e,i),{passive:false});
+      pin.addEventListener("click",e=>{e.stopPropagation();selected=i;render();focusRow(i);});
+      stage.appendChild(pin);
+    });
+    renderList(); renderOut();
+  }
+
+  function renderList(){
+    const list=document.getElementById("hslist");
+    if(!hotspots.length){ list.innerHTML='<div class="empty-hs">No pins yet — click the photo to add one.</div>'; return; }
+    list.innerHTML=hotspots.map((h,i)=>`
+      <div class="hsrow${i===selected?' sel':''}" data-i="${i}">
+        <div class="hd">
+          <span class="tag">Pin ${i+1}</span>
+          <span class="coords">${h.x}% , ${h.y}%</span>
+          <button class="del" title="Delete pin" onclick="delHs(${i})">&times;</button>
+        </div>
+        <label>Device name</label>
+        <input type="text" value="${esc(h.name)}" placeholder="e.g. Lutron Palladiom Keypad" oninput="upd(${i},'name',this.value)">
+        <label>Product link (URL)</label>
+        <input type="url" value="${esc(h.url)}" placeholder="https://…" oninput="upd(${i},'url',this.value)">
+      </div>`).join("");
+  }
+
+  function renderOut(){
+    const obj={
+      src: srcInput.value.trim() || "assets/projects/<project>/<file>.jpg",
+      caption: document.getElementById("caption").value.trim(),
+      hotspots: hotspots.map(h=>({x:h.x,y:h.y,name:h.name.trim(),url:h.url.trim()}))
+    };
+    document.getElementById("out").value=JSON.stringify(obj,null,2)+",";
+  }
+
+  function upd(i,k,v){ hotspots[i][k]=v; if(k!=="name"&&k!=="url"){} renderOut();
+    // update coords label live without full re-render churn
+  }
+  function delHs(i){ hotspots.splice(i,1); if(selected>=hotspots.length)selected=hotspots.length-1; render(); }
+  function focusRow(i){ const row=document.querySelector('.hsrow[data-i="'+i+'"] input'); if(row) row.focus(); }
+  function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;");}
+
+  document.getElementById("src").addEventListener("input",renderOut);
+  document.getElementById("caption").addEventListener("input",renderOut);
+
+  function copyOut(){
+    const t=document.getElementById("out"); t.select();
+    navigator.clipboard.writeText(t.value).then(showCopied,()=>{document.execCommand("copy");showCopied();});
+  }
+  function showCopied(){const c=document.getElementById("copied");c.classList.add("show");setTimeout(()=>c.classList.remove("show"),1400);}
+  function resetAll(){ if(!confirm("Clear all pins and fields for this photo?"))return; hotspots=[];selected=-1;document.getElementById("caption").value="";render(); }
+
+  renderOut();
+</script>
+</body>
+</html>
