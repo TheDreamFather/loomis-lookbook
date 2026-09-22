@@ -196,6 +196,35 @@ export async function onRequest(context) {
       return json({ user: user ? publicUser(user) : null });
     }
 
+    // ---- VALIDATE (shared team-auth for other apps, e.g. the bls-sales CRM) ----
+    // Stateless credential check against the SAME users table. Sets no cookie.
+    // Intended for server-to-server calls (the CRM Worker) or a same-account Worker
+    // that binds this D1 directly. If env.TEAM_AUTH_KEY is set, require a matching
+    // "x-team-auth" header so the endpoint isn't openly callable; if unset, it behaves
+    // like /api/login (same exposure). Non-destructive: does not modify any row.
+    if (route === "validate" && method === "POST") {
+      if (env.TEAM_AUTH_KEY) {
+        const provided = request.headers.get("x-team-auth") || "";
+        if (!timingSafeEqualHex(
+              await hmacHex(env.TEAM_AUTH_KEY, "k"),
+              await hmacHex(provided, "k"))) {
+          return json({ valid: false, error: "Unauthorized caller." }, 401);
+        }
+      }
+      const body = await request.json().catch(() => ({}));
+      const lastName = (body.lastName || "").toString().trim();
+      const password = (body.password || "").toString();
+      if (!lastName || !password) return json({ valid: false, error: "Missing credentials." }, 400);
+      const user = await env.DB
+        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password FROM users WHERE lower(last_name)=lower(?)")
+        .bind(lastName).first();
+      if (!user) return json({ valid: false });
+      const firstTime = user.must_change_password || !user.password_hash;
+      const ok = firstTime ? (password === String(user.last4)) : await verifyPassword(password, user.password_hash);
+      if (!ok) return json({ valid: false });
+      return json({ valid: true, mustChange: !!firstTime, user: publicUser(user) });
+    }
+
     // ---- COMMENTS ----
     if (route === "comments") {
       const user = await currentUser(context);
