@@ -135,6 +135,7 @@ function clearCookieHeader() {
 async function teamAuth(request, env) {
   if (!env.TEAM_AUTH_KEY) return { configured: false, ok: false };
   const provided = request.headers.get("x-team-auth") || "";
+  if (!provided) return { configured: true, ok: false }; // missing header → clean reject (no HMAC on empty key)
   const ok = timingSafeEqualHex(
     await hmacHex(env.TEAM_AUTH_KEY, "k"),
     await hmacHex(provided, "k")
