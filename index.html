@@ -101,9 +101,10 @@
     font-family:var(--serif);font-weight:400;font-style:normal;
     font-size:clamp(56px,16vw,260px);line-height:.86;letter-spacing:.02em;
     white-space:nowrap;max-width:100%;
-    color:var(--ivory);
+    color:var(--ivory);cursor:pointer;
     opacity:0;animation:riseHero 1.8s cubic-bezier(.16,1,.3,1) .35s forwards;
   }
+  .hero h1:focus-visible{outline:1px solid var(--accent);outline-offset:12px}
   .hero h1 .i{font-style:italic;color:var(--accent-soft)}
   .hero .kicker{
     margin-top:30px;font-size:12.5px;letter-spacing:.5em;text-transform:uppercase;color:var(--ivory-dim);
@@ -405,7 +406,7 @@
         <img src="https://betterlivingsystems.com/images/logo-word-light.png" alt="Better Living Systems" onerror="this.replaceWith(document.createTextNode('Better Living Systems'))">
         <span>Presents</span>
       </div>
-      <h1>LOO<span class="i">K</span>BOOK</h1>
+      <h1 onclick="goHome()" role="link" tabindex="0" aria-label="Lookbook home" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();goHome();}">LOO<span class="i">K</span>BOOK</h1>
       <div class="kicker">A Residential Concept Lookbook</div>
       <p class="tagline">Cinema, light, sound and control — curated by Better Living Systems for a singular residence.</p>
       <div class="divider"></div>
@@ -1064,7 +1065,13 @@ async function postComment(ev,projectId){
   return false;
 }
 
-function goHome(){window.scrollTo({top:0,behavior:"smooth"});}
+function goHome(){
+  /* Always return to the generic concept-lookbook home from anywhere
+     (Projects portal, Portfolio, a project view, or the login screen). */
+  setActiveNav(null);
+  selectTab(LOOMIS[0].id,false);   /* restores concept content + clears portal state, no auto-scroll */
+  window.scrollTo({top:0,behavior:"smooth"});
+}
 
 function applyLogo(){
   if(BLS_LOGO && BLS_LOGO.trim()!==""){
