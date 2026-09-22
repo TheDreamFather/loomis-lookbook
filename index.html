@@ -194,6 +194,13 @@
   footer .f-logo{height:26px;width:auto;opacity:.9;margin-bottom:14px;display:block}
   footer .f-brand-fallback{font-family:var(--serif);font-size:22px;letter-spacing:.02em;margin-bottom:14px}
   footer .f-note{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted-2);max-width:540px;line-height:2.1}
+  footer .f-link{display:inline-flex;align-items:center;gap:8px;margin-top:16px;
+    font-family:var(--sans);font-size:10px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--ivory-dim);text-decoration:none;border-bottom:1px solid var(--line);padding-bottom:4px;
+    transition:color .35s ease,border-color .35s ease}
+  footer .f-link:hover{color:var(--accent-soft);border-color:var(--accent)}
+  footer .f-link .arw{transition:transform .35s ease}
+  footer .f-link:hover .arw{transform:translateX(4px)}
 
   @media(max-width:640px){
     .brand .divider-v,.brand .proj{display:none}
@@ -416,6 +423,7 @@
     <div>
       <img class="f-logo" src="https://betterlivingsystems.com/images/logo-word-light.png" alt="Better Living Systems" onerror="this.outerHTML='&lt;div class=&quot;f-brand-fallback&quot;&gt;Better Living Systems&lt;/div&gt;'">
       <div class="f-note">Lookbook · Better Living Systems · prepared for private presentation</div>
+      <a class="f-link" href="https://betterlivingsystems.com" target="_blank" rel="noopener">Visit betterlivingsystems.com <span class="arw">→</span></a>
     </div>
     <div class="f-note">
       Product imagery and copy shown as concept references from distribution partners.<br>
