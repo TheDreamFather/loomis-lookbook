@@ -127,6 +127,21 @@ function clearCookieHeader() {
   return `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
+// Shared team-auth gate for cross-app (CRM) endpoints. Compares the caller's
+// "x-team-auth" header against env.TEAM_AUTH_KEY in constant time (via HMAC so
+// differing lengths don't leak). Returns { configured, ok }:
+//   configured=false → no TEAM_AUTH_KEY set on this project.
+//   ok=true          → header matches the secret.
+async function teamAuth(request, env) {
+  if (!env.TEAM_AUTH_KEY) return { configured: false, ok: false };
+  const provided = request.headers.get("x-team-auth") || "";
+  const ok = timingSafeEqualHex(
+    await hmacHex(env.TEAM_AUTH_KEY, "k"),
+    await hmacHex(provided, "k")
+  );
+  return { configured: true, ok };
+}
+
 export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -168,12 +183,39 @@ export async function onRequest(context) {
       });
     }
 
-    // ---- SET / CHANGE PASSWORD (must be logged in) ----
+    // ---- SET / CHANGE PASSWORD ----
+    // Two modes on the same URL:
+    //  A) TEAM WRITE (cross-app, e.g. the bls-sales CRM): body includes "lastName".
+    //     Requires the x-team-auth shared-secret gate. Writes to that user's
+    //     password_hash so a change made on either app stays in sync. Sets no cookie.
+    //  B) SELF-SERVICE (the lookbook's own forced-password-change): body has only
+    //     "newPassword"; the signed-in user (cookie) is the target.
     if (route === "set-password" && method === "POST") {
-      const user = await currentUser(context);
-      if (!user) return json({ error: "Please sign in first." }, 401);
       const body = await request.json().catch(() => ({}));
       const newPassword = (body.newPassword || "").toString();
+      const teamLastName = (body.lastName || "").toString().trim();
+
+      // --- Mode A: team write (identified by a lastName in the body) ---
+      if (teamLastName) {
+        const gate = await teamAuth(request, env);
+        if (!gate.configured) return json({ ok: false, error: "Team auth not configured on this project." }, 403);
+        if (!gate.ok) return json({ ok: false, error: "Unauthorized caller." }, 401);
+        const issue = passwordIssue(newPassword);
+        if (issue) return json({ ok: false, error: `Password needs ${issue}.` }, 400);
+        const user = await env.DB
+          .prepare("SELECT id FROM users WHERE lower(last_name)=lower(?)")
+          .bind(teamLastName).first();
+        if (!user) return json({ ok: false, error: "User not found." }, 404);
+        const hash = await hashPassword(newPassword);
+        await env.DB
+          .prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?")
+          .bind(hash, user.id).run();
+        return json({ ok: true });
+      }
+
+      // --- Mode B: self-service (must be signed in) ---
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in first." }, 401);
       const issue = passwordIssue(newPassword);
       if (issue) return json({ error: `Password needs ${issue}.` }, 400);
       const hash = await hashPassword(newPassword);
@@ -203,14 +245,8 @@ export async function onRequest(context) {
     // "x-team-auth" header so the endpoint isn't openly callable; if unset, it behaves
     // like /api/login (same exposure). Non-destructive: does not modify any row.
     if (route === "validate" && method === "POST") {
-      if (env.TEAM_AUTH_KEY) {
-        const provided = request.headers.get("x-team-auth") || "";
-        if (!timingSafeEqualHex(
-              await hmacHex(env.TEAM_AUTH_KEY, "k"),
-              await hmacHex(provided, "k"))) {
-          return json({ valid: false, error: "Unauthorized caller." }, 401);
-        }
-      }
+      const gate = await teamAuth(request, env);
+      if (gate.configured && !gate.ok) return json({ valid: false, error: "Unauthorized caller." }, 401);
       const body = await request.json().catch(() => ({}));
       const lastName = (body.lastName || "").toString().trim();
       const password = (body.password || "").toString();
