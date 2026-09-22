@@ -67,7 +67,16 @@
   .brand .wordmark-fallback{font-family:var(--serif);font-size:22px;letter-spacing:.02em;color:var(--ivory)}
   .brand .divider-v{width:1px;height:22px;background:var(--line)}
   .brand .proj{font-size:9.5px;letter-spacing:.42em;text-transform:uppercase;color:var(--muted)}
-  .topbar-right{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted)}
+  .topbar-right{display:flex;align-items:center;gap:18px}
+  .tr-label{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted)}
+  .proj-btn{background:none;border:1px solid var(--line);color:var(--ivory-dim);cursor:pointer;
+    font-family:var(--sans);font-size:10px;font-weight:400;letter-spacing:.28em;text-transform:uppercase;
+    padding:9px 18px;border-radius:100px;display:inline-flex;align-items:center;gap:9px;
+    transition:border-color .35s ease,color .35s ease,background .35s ease}
+  .proj-btn::before{content:"";width:5px;height:5px;border-radius:50%;background:var(--accent);flex:0 0 auto;transition:transform .35s ease}
+  .proj-btn:hover{border-color:var(--accent);color:var(--ivory)}
+  .proj-btn.active{border-color:var(--accent);color:var(--accent-soft);background:rgba(185,154,99,.08)}
+  .proj-btn.active::before{transform:scale(1.5)}
 
   /* ---------- Hero ---------- */
   .hero{
@@ -188,7 +197,8 @@
 
   @media(max-width:640px){
     .brand .divider-v,.brand .proj{display:none}
-    .topbar-right{display:none}
+    .tr-label{display:none}
+    .proj-btn{padding:8px 14px;letter-spacing:.2em}
     .grid{grid-template-columns:1fr}
     .hero h1{font-size:clamp(34px,12.5vw,96px);letter-spacing:0}
   }
@@ -231,6 +241,37 @@
   .dd-item .di-sub{display:block;margin-top:3px;font-size:9px;letter-spacing:.24em;text-transform:uppercase;color:var(--muted-2)}
   .dd-empty{padding:14px 22px;color:var(--muted-2);font-size:11px;letter-spacing:.04em}
 
+  /* ---------- Projects catalog ---------- */
+  .cat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:clamp(18px,2vw,28px)}
+  .pcard{position:relative;display:flex;flex-direction:column;text-align:left;cursor:pointer;
+    background:var(--panel);border:1px solid var(--line-soft);overflow:hidden;padding:0;
+    font-family:var(--sans);color:var(--ivory);
+    transition:border-color .5s ease,transform .8s cubic-bezier(.16,1,.3,1),box-shadow .5s ease}
+  .pcard:hover{border-color:var(--line);box-shadow:0 30px 80px -30px rgba(0,0,0,.9)}
+  .pcard-media{position:relative;aspect-ratio:16/10;background:var(--panel-2);overflow:hidden;line-height:0}
+  .pcard-media img{width:100%;height:100%;object-fit:cover;display:block;filter:saturate(.92) brightness(.9);
+    transition:transform 1.3s cubic-bezier(.16,1,.3,1),filter .6s ease}
+  .pcard:hover .pcard-media img{transform:scale(1.06);filter:saturate(1.02) brightness(1)}
+  .pcard-media .media-fallback{position:absolute;inset:0}
+  .pcard-flag{position:absolute;top:14px;right:14px;z-index:3;background:rgba(6,6,5,.66);border:1px dashed var(--line);
+    border-radius:100px;padding:5px 12px;font-size:8px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted)}
+  .pcard-body{padding:26px 26px 28px;display:flex;flex-direction:column;gap:12px;flex:1}
+  .pcard-brand{font-size:9px;letter-spacing:.34em;text-transform:uppercase;color:var(--accent)}
+  .pcard-title{font-family:var(--serif);font-size:27px;font-weight:400;line-height:1.1;color:var(--ivory)}
+  .pcard-sub{color:var(--muted);font-size:13.5px;line-height:1.7;flex:1}
+  .pcard-meta{margin-top:6px;font-size:9.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted-2);
+    display:flex;align-items:center;gap:10px}
+  .pcard-meta .go{margin-left:auto;color:var(--ivory);display:inline-flex;align-items:center;gap:8px;transition:color .4s}
+  .pcard:hover .pcard-meta .go{color:var(--accent-soft)}
+  .pcard-meta .go .arrow{transition:transform .45s ease}
+  .pcard:hover .pcard-meta .go .arrow{transform:translateX(5px)}
+  .back-link{background:none;border:none;cursor:pointer;color:var(--muted);font-family:var(--sans);
+    font-size:10px;letter-spacing:.26em;text-transform:uppercase;padding:0;margin-bottom:26px;
+    display:inline-flex;align-items:center;gap:10px;transition:color .4s ease}
+  .back-link:hover{color:var(--accent-soft)}
+  .back-link .arrow{transition:transform .45s ease}
+  .back-link:hover .arrow{transform:translateX(-5px)}
+
   /* ---------- Project gallery ---------- */
   .proj-head{margin-bottom:56px;max-width:900px}
   .proj-head .eyebrow{font-size:10.5px;letter-spacing:.48em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:22px}
@@ -271,23 +312,72 @@
     .dd-menu{left:0}
     .hs-tip{min-width:150px}
   }
+
+  /* ---------- Portfolio (Coming Soon) ---------- */
+  .coming{max-width:720px;padding:20px 0 40px}
+  .coming .eyebrow{font-size:10.5px;letter-spacing:.48em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:22px}
+  .coming h2{font-family:var(--serif);font-weight:400;font-size:clamp(52px,9vw,110px);line-height:.96;color:var(--ivory)}
+  .coming-tag{display:inline-block;margin:26px 0 22px;border:1px solid var(--line);border-radius:100px;padding:8px 20px;
+    font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--accent-soft)}
+  .coming p{color:var(--muted);font-size:16px;line-height:1.95;max-width:600px}
+  .coming a{color:var(--accent-soft);border-bottom:1px solid var(--line)}
+
+  /* ---------- Projects portal: auth ---------- */
+  .portal-auth{max-width:440px;margin:10px auto 0;padding:20px 0 40px;text-align:center}
+  .portal-auth .eyebrow{font-size:10.5px;letter-spacing:.44em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:20px}
+  .portal-auth h2{font-family:var(--serif);font-weight:400;font-size:clamp(40px,7vw,64px);line-height:1;color:var(--ivory)}
+  .pa-sub{margin-top:18px;color:var(--muted);font-size:14px;line-height:1.8}
+  .pa-sub b{color:var(--ivory-dim);font-weight:500}
+  .pa-hint{color:var(--muted-2);font-size:12.5px}
+  .pa-form{margin-top:32px;display:flex;flex-direction:column;gap:14px;text-align:left}
+  .pa-note{margin-top:22px;font-size:11px;letter-spacing:.04em;color:var(--muted-2);line-height:1.7}
+  .pw-rules{list-style:none;margin:26px 0 0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 18px;text-align:left}
+  .pw-rules li{position:relative;padding-left:24px;font-size:12px;letter-spacing:.02em;color:var(--muted-2);transition:color .25s}
+  .pw-rules li::before{content:"";position:absolute;left:0;top:3px;width:13px;height:13px;border-radius:50%;border:1px solid var(--muted-2);transition:all .25s}
+  .pw-rules li.ok{color:var(--ivory-dim)}
+  .pw-rules li.ok::before{background:var(--accent);border-color:var(--accent)}
+
+  /* ---------- Signed-in bar ---------- */
+  .portal-bar{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;
+    padding:14px 18px;margin-bottom:34px;background:var(--panel);border:1px solid var(--line-soft)}
+  .pb-user{font-size:12px;letter-spacing:.04em;color:var(--muted)}
+  .pb-user b{color:var(--ivory);font-weight:500}
+  .pb-role{margin-left:8px;font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--accent-soft);
+    border:1px solid var(--line);border-radius:100px;padding:3px 10px}
+  .pb-signout{background:none;border:1px solid var(--line);color:var(--ivory-dim);cursor:pointer;
+    font-family:var(--sans);font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;padding:8px 16px;border-radius:100px;transition:border-color .3s,color .3s}
+  .pb-signout:hover{border-color:var(--accent);color:var(--accent-soft)}
+
+  /* ---------- Comments & requests panel ---------- */
+  .cpanel{margin-top:clamp(36px,5vw,64px);border-top:1px solid var(--line-soft);padding-top:clamp(30px,4vw,48px)}
+  .cpanel-head .eyebrow{font-size:10px;letter-spacing:.42em;text-transform:uppercase;color:var(--accent);display:block;margin-bottom:14px}
+  .cpanel-head h3{font-family:var(--serif);font-weight:400;font-size:clamp(26px,4vw,38px);color:var(--ivory);line-height:1.1}
+  .cp-sub{margin-top:12px;color:var(--muted);font-size:14px;line-height:1.7;max-width:560px}
+  .cp-thread{margin:30px 0 24px;display:flex;flex-direction:column;gap:12px}
+  .cp-loading,.cp-empty{color:var(--muted-2);font-size:13px;letter-spacing:.03em;padding:8px 0}
+  .cp-item{background:var(--panel);border:1px solid var(--line-soft);border-left:2px solid var(--line);padding:16px 18px}
+  .cp-item.is-request{border-left-color:var(--accent)}
+  .cp-meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:9px}
+  .cp-author{font-size:12px;color:var(--ivory);font-weight:500;letter-spacing:.02em}
+  .cp-badge{font-size:8px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:100px;padding:3px 9px}
+  .cp-item.is-request .cp-badge{color:var(--accent-soft);border-color:rgba(185,154,99,.4)}
+  .cp-time{font-size:10.5px;color:var(--muted-2);letter-spacing:.04em;margin-left:auto}
+  .cp-body{color:var(--ivory-dim);font-size:14px;line-height:1.7;white-space:pre-wrap}
+  .cp-form{background:var(--panel);border:1px solid var(--line-soft);padding:18px}
+  .cp-type{display:flex;gap:20px;margin-bottom:14px}
+  .cp-radio{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);cursor:pointer}
+  .cp-radio input{accent-color:var(--accent)}
+  .cp-text{width:100%;background:rgba(255,255,255,.04);border:1px solid rgba(217,210,196,.22);color:var(--ivory);
+    font-family:var(--sans);font-size:14px;line-height:1.6;padding:12px 14px;border-radius:2px;outline:none;resize:vertical;transition:border-color .2s}
+  .cp-text:focus{border-color:var(--accent)}
+  .cp-actions{display:flex;align-items:center;justify-content:flex-end;gap:16px;margin-top:12px}
+  .cp-err{margin-right:auto;color:#cf9182;font-size:12px;letter-spacing:.02em}
+  .cp-submit{background:var(--accent);color:#060605;font-family:var(--sans);font-weight:500;font-size:10.5px;letter-spacing:.24em;text-transform:uppercase;padding:12px 24px;border:none;border-radius:2px;cursor:pointer;transition:background .2s}
+  .cp-submit:hover{background:var(--accent-soft)}
+  .cp-submit:disabled{opacity:.6;cursor:default}
 </style>
 </head>
 <body>
-
-  <div id="gate" class="gate" role="dialog" aria-modal="true" aria-label="Login">
-    <div class="gate-inner">
-      <div class="gate-presents">Better Living Systems</div>
-      <h1 class="gate-mark">LOO<span class="i">K</span>BOOK</h1>
-      <div class="gate-kicker">Private Client Presentation</div>
-      <form id="gateForm" class="gate-form" autocomplete="off">
-        <input type="text" id="gateUser" class="gate-input" placeholder="Username" autocomplete="off" spellcheck="false">
-        <input type="password" id="gatePass" class="gate-input" placeholder="Password" autocomplete="off">
-        <button type="submit" class="gate-btn">Login</button>
-        <div id="gateErr" class="gate-err" aria-live="polite"></div>
-      </form>
-    </div>
-  </div>
 
   <header class="topbar" id="topbar">
     <div class="brand" onclick="goHome()">
@@ -295,7 +385,11 @@
       <span class="divider-v"></span>
       <span class="proj">The Lookbook</span>
     </div>
-    <div class="topbar-right">Private Client Presentation</div>
+    <div class="topbar-right">
+      <span class="tr-label" id="authLabel">Private Client Presentation</span>
+      <button class="proj-btn" id="portfolioBtn" onclick="showPortfolio()" aria-label="Portfolio">Portfolio</button>
+      <button class="proj-btn" id="projBtn" onclick="showProjects()" aria-label="Project portal login">Projects</button>
+    </div>
   </header>
 
   <section class="hero" id="hero">
@@ -641,6 +735,7 @@ function renderProject(proj){
   const hasHotspots = (proj.photos||[]).some(p=>p.hotspots&&p.hotspots.length);
   const hint = hasHotspots ? `<div class="hint"><span class="hdot"></span>Hover or tap a marker to see the device &amp; open its product page</div>` : "";
   content.innerHTML = `
+    <button class="back-link" onclick="showProjects()"><span class="arrow">&larr;</span> All Projects</button>
     <div class="proj-head">
       ${flag}
       <span class="eyebrow">Completed Installation</span>
@@ -672,74 +767,293 @@ function playVideo(coverEl){
 }
 
 function buildTabs(){
-  const catTabs = LOOMIS.map(c=>`<button class="tab" data-id="${c.id}" onclick="selectTab('${c.id}')">${escapeHTML(c.label)}</button>`).join("");
-  const dropdown = `
-    <div class="dd" id="projDD">
-      <button class="tab has-menu" id="projTab" onclick="toggleProjDD(event)" aria-haspopup="true" aria-expanded="false">Previous Projects<span class="caret"></span></button>
-    </div>`;
-  document.getElementById("tabs").innerHTML = catTabs + dropdown;
-  // Build the menu once and append to <body> so the nav's overflow can't clip it
-  let menu=document.getElementById("projMenu");
-  if(!menu){ menu=document.createElement("div"); menu.id="projMenu"; menu.className="dd-menu"; menu.setAttribute("role","menu"); document.body.appendChild(menu); }
-  menu.innerHTML = PROJECTS.length
-    ? PROJECTS.map(p=>`<button class="dd-item" data-pid="${p.id}" onclick="selectProject('${p.id}')">${escapeHTML(p.title)}${p.subtitle?`<span class="di-sub">${escapeHTML(p.placeholder?'Sample · placeholder':p.subtitle)}</span>`:""}</button>`).join("")
-    : `<div class="dd-empty">No completed projects yet.</div>`;
+  document.getElementById("tabs").innerHTML =
+    LOOMIS.map(c=>`<button class="tab" data-id="${c.id}" onclick="selectTab('${c.id}')">${escapeHTML(c.label)}</button>`).join("");
 }
 
-function positionProjMenu(){
-  const t=document.getElementById("projTab"), m=document.getElementById("projMenu");
-  if(!t||!m) return;
-  const r=t.getBoundingClientRect();
-  const mw=m.offsetWidth||270;
-  let left=r.left;
-  if(left+mw>window.innerWidth-10) left=Math.max(10,window.innerWidth-10-mw);
-  m.style.left=left+"px";
-  m.style.top=r.bottom+"px";
+function scrollToContent(){
+  const y = document.getElementById("navwrap").offsetTop - 60;
+  if(window.scrollY < y) window.scrollTo({top:y,behavior:"smooth"});
 }
-function toggleProjDD(ev){
-  if(ev) ev.stopPropagation();
-  const dd=document.getElementById("projDD"), m=document.getElementById("projMenu"), t=document.getElementById("projTab");
-  const willOpen=!dd.classList.contains("open");
-  dd.classList.toggle("open",willOpen);
-  if(willOpen){ positionProjMenu(); m.classList.add("open"); } else { m.classList.remove("open"); }
-  t.setAttribute("aria-expanded",willOpen?"true":"false");
+
+/* ---- Projects catalog (grid of completed projects) ---- */
+function projectCover(p){ return p.cover || (p.photos && p.photos[0] && p.photos[0].src) || ""; }
+
+function catalogCardHTML(p){
+  const cover = projectCover(p);
+  const photoCount = (p.photos||[]).length;
+  const deviceCount = (p.photos||[]).reduce((n,ph)=>n+((ph.hotspots||[]).length),0);
+  const media = cover
+    ? `<div class="pcard-media"><img src="${escapeAttr(cover)}" alt="${escapeAttr(p.title)}" onerror="this.style.opacity=.2"></div>`
+    : `<div class="pcard-media"><div class="media-fallback">${iconImage()}<span>Cover Placeholder</span></div></div>`;
+  const flag = p.placeholder ? `<span class="pcard-flag">Sample</span>` : "";
+  const meta = `${photoCount} photo${photoCount!==1?'s':''}${deviceCount?` &middot; ${deviceCount} tagged`:''}`;
+  return `<button class="pcard" onclick="selectProject('${p.id}')" aria-label="Open ${escapeAttr(p.title)}">
+      ${media}${flag}
+      <div class="pcard-body">
+        <div class="pcard-brand">Completed Installation</div>
+        <div class="pcard-title">${escapeHTML(p.title)}</div>
+        ${p.subtitle?`<div class="pcard-sub">${escapeHTML(p.subtitle)}</div>`:""}
+        <div class="pcard-meta"><span>${meta}</span><span class="go">View <span class="arrow">&rarr;</span></span></div>
+      </div>
+    </button>`;
 }
-function closeProjDD(){
-  const dd=document.getElementById("projDD"), m=document.getElementById("projMenu"), t=document.getElementById("projTab");
-  if(dd) dd.classList.remove("open");
-  if(m) m.classList.remove("open");
-  if(t) t.setAttribute("aria-expanded","false");
+
+function renderCatalog(ids){
+  const list = ids ? PROJECTS.filter(p=>ids.includes(p.id)) : PROJECTS;
+  const cards = list.length
+    ? list.map(catalogCardHTML).join("")
+    : `<div class="empty-note">No completed projects yet.</div>`;
+  return `<div class="cat-grid">${cards}</div>`;
 }
-document.addEventListener("click",e=>{ if(!e.target.closest("#projDD") && !e.target.closest("#projMenu")) closeProjDD(); });
-window.addEventListener("resize",()=>{ const m=document.getElementById("projMenu"); if(m&&m.classList.contains("open")) positionProjMenu(); });
-window.addEventListener("scroll",()=>{ const m=document.getElementById("projMenu"); if(m&&m.classList.contains("open")) closeProjDD(); },{passive:true});
+
+function setActiveNav(which){
+  const pf=document.getElementById("portfolioBtn"), pj=document.getElementById("projBtn");
+  if(pf) pf.classList.toggle("active",which==="portfolio");
+  if(pj) pj.classList.toggle("active",which==="projects");
+  if(which) document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+}
+
+/* ---- Portfolio (Coming Soon) ---- */
+function showPortfolio(scroll=true){
+  setActiveNav("portfolio");
+  document.getElementById("content").innerHTML = `
+    <div class="coming">
+      <span class="eyebrow">Better Living Systems</span>
+      <h2>Portfolio</h2>
+      <div class="coming-tag">Coming Soon</div>
+      <p>A curated showcase of our signature installations is on the way. In the meantime, explore the concept lookbook above — or open <a href="#projects" onclick="showProjects();return false;">Projects</a> to sign in to a project portal.</p>
+    </div>`;
+  if(location.hash!=="#portfolio") history.replaceState(null,"","#portfolio");
+  if(scroll) scrollToContent();
+}
+
+/* ---- Projects portal (login-gated) ---- */
+function showProjects(scroll=true){
+  setActiveNav("projects");
+  if(LB_USER && LB_USER.mustChange){ renderSetPassword(); }
+  else if(LB_USER){ renderProjectsHome(scroll); return; }
+  else { renderLogin(); }
+  if(location.hash!=="#projects") history.replaceState(null,"","#projects");
+  if(scroll) scrollToContent();
+}
+
+function renderLogin(){
+  document.getElementById("content").innerHTML = `
+    <div class="portal-auth">
+      <span class="eyebrow">Project Portal</span>
+      <h2>Sign in</h2>
+      <p class="pa-sub">For the owner, assigned sales reps and clients. Use your <b>last name</b> and your password.<br><span class="pa-hint">First time? Your password is the <b>last 4 digits of your phone number</b> — you'll set a new one next.</span></p>
+      <form id="loginForm" class="pa-form" autocomplete="off" onsubmit="return handleLogin(event)">
+        <input type="text" id="loginLast" class="gate-input" placeholder="Last name" autocomplete="off" spellcheck="false">
+        <input type="password" id="loginPass" class="gate-input" placeholder="Password (first time: last 4 of phone)" autocomplete="off">
+        <button type="submit" class="gate-btn" id="loginSubmit">Sign in</button>
+        <div id="loginErr" class="gate-err" aria-live="polite"></div>
+      </form>
+      <p class="pa-note">Light access for project collaboration — please don't share sensitive information here.</p>
+    </div>`;
+  setTimeout(()=>{const el=document.getElementById("loginLast"); if(el) el.focus();},60);
+}
+
+async function handleLogin(ev){
+  ev.preventDefault();
+  const last=document.getElementById("loginLast").value.trim();
+  const pass=document.getElementById("loginPass").value;
+  const err=document.getElementById("loginErr");
+  const btn=document.getElementById("loginSubmit");
+  err.classList.remove("show"); err.textContent="";
+  if(!last||!pass){ err.textContent="Enter your last name and password."; err.classList.add("show"); return false; }
+  btn.disabled=true; btn.textContent="Signing in…";
+  try{
+    const r=await fetch("/api/login",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({lastName:last,password:pass})});
+    const d=await r.json();
+    if(!r.ok||!d.ok){ err.textContent=d.error||"Sign in failed."; err.classList.add("show"); btn.disabled=false; btn.textContent="Sign in"; return false; }
+    LB_USER=d.user; updateAuthUI();
+    if(d.mustChange){ renderSetPassword(); }
+    else { renderProjectsHome(true); }
+  }catch(e){ err.textContent="Network error. Please try again."; err.classList.add("show"); btn.disabled=false; btn.textContent="Sign in"; }
+  return false;
+}
+
+/* ---- Forced first-login password change ---- */
+function passwordIssueClient(pw){
+  pw=String(pw||"");
+  if(pw.length<8) return "at least 8 characters";
+  if(!/[a-z]/.test(pw)) return "a lowercase letter";
+  if(!/[A-Z]/.test(pw)) return "an uppercase letter";
+  if(!/[0-9]/.test(pw)) return "a number";
+  return null;
+}
+function renderSetPassword(){
+  document.getElementById("content").innerHTML = `
+    <div class="portal-auth">
+      <span class="eyebrow">Welcome, ${escapeHTML((LB_USER&&LB_USER.name)||"")}</span>
+      <h2>Set your password</h2>
+      <p class="pa-sub">Before you continue, choose a password you'll use from now on.</p>
+      <ul class="pw-rules" id="pwRules">
+        <li data-rule="len">At least 8 characters</li>
+        <li data-rule="upper">One uppercase letter</li>
+        <li data-rule="lower">One lowercase letter</li>
+        <li data-rule="num">One number</li>
+      </ul>
+      <form id="setPwForm" class="pa-form" autocomplete="off" onsubmit="return handleSetPassword(event)">
+        <input type="password" id="pwNew" class="gate-input" placeholder="New password" autocomplete="new-password" oninput="updatePwRules()">
+        <input type="password" id="pwConfirm" class="gate-input" placeholder="Confirm new password" autocomplete="new-password">
+        <button type="submit" class="gate-btn" id="pwSubmit">Save password &amp; continue</button>
+        <div id="pwErr" class="gate-err" aria-live="polite"></div>
+      </form>
+    </div>`;
+  setTimeout(()=>{const el=document.getElementById("pwNew"); if(el) el.focus();},60);
+}
+function updatePwRules(){
+  const pw=(document.getElementById("pwNew")||{}).value||"";
+  const set=(sel,ok)=>{const el=document.querySelector('#pwRules li[data-rule="'+sel+'"]'); if(el) el.classList.toggle("ok",ok);};
+  set("len",pw.length>=8); set("upper",/[A-Z]/.test(pw)); set("lower",/[a-z]/.test(pw)); set("num",/[0-9]/.test(pw));
+}
+async function handleSetPassword(ev){
+  ev.preventDefault();
+  const pw=document.getElementById("pwNew").value;
+  const confirm=document.getElementById("pwConfirm").value;
+  const err=document.getElementById("pwErr"); const btn=document.getElementById("pwSubmit");
+  err.classList.remove("show"); err.textContent="";
+  const issue=passwordIssueClient(pw);
+  if(issue){ err.textContent="Password needs "+issue+"."; err.classList.add("show"); return false; }
+  if(pw!==confirm){ err.textContent="Passwords don't match."; err.classList.add("show"); return false; }
+  btn.disabled=true; btn.textContent="Saving…";
+  try{
+    const r=await fetch("/api/set-password",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({newPassword:pw})});
+    const d=await r.json();
+    if(!r.ok||!d.ok){ err.textContent=d.error||"Couldn't save password."; err.classList.add("show"); btn.disabled=false; btn.textContent="Save password & continue"; return false; }
+    LB_USER=d.user; updateAuthUI(); renderProjectsHome(true);
+  }catch(e){ err.textContent="Network error. Please try again."; err.classList.add("show"); btn.disabled=false; btn.textContent="Save password & continue"; }
+  return false;
+}
+
+function greetingBar(){
+  const role = LB_USER.role==="sales" ? "Sales" : "Client";
+  return `<div class="portal-bar">
+      <span class="pb-user">Signed in as <b>${escapeHTML(LB_USER.name)}</b> <span class="pb-role">${role}</span></span>
+      <button class="pb-signout" onclick="doLogout()">Sign out</button>
+    </div>`;
+}
+
+function renderProjectsHome(scroll=true){
+  if(LB_USER.mustChange){ renderSetPassword(); return; }
+  const isAdmin = LB_USER.role==="admin";
+  const mine = isAdmin ? PROJECTS.slice() : PROJECTS.filter(p=>(LB_USER.projects||[]).includes(p.id));
+  if(!isAdmin && LB_USER.role==="client" && mine.length===1){ selectProject(mine[0].id, scroll); return; }
+  const eyebrow = isAdmin ? "Owner Portal" : (LB_USER.role==="sales"?"Sales Portal":"Your Lookbook");
+  const intro = isAdmin
+    ? "Owner view — every project across all reps and clients. Open one to review its gallery and the comments &amp; requests."
+    : (LB_USER.role==="sales"
+        ? "Projects assigned to you. Open one to review its gallery and the client's comments &amp; requests."
+        : "Your project lookbook. Open a project to view its gallery and leave comments or requests.");
+  const grid = mine.length
+    ? (isAdmin ? renderCatalog() : renderCatalog(LB_USER.projects||[]))
+    : `<div class="empty-note">No projects are assigned to your account yet.</div>`;
+  document.getElementById("content").innerHTML = greetingBar() + `
+    <div class="cat-head" style="margin-top:6px">
+      <span class="eyebrow">${eyebrow}</span>
+      <h2>Projects</h2>
+      <p>${intro}</p>
+    </div>${grid}`;
+  if(location.hash!=="#projects") history.replaceState(null,"","#projects");
+  if(scroll) scrollToContent();
+}
 
 function selectTab(id,scroll=true){
   const cat = LOOMIS.find(c=>c.id===id) || LOOMIS[0];
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.id===cat.id));
-  document.querySelectorAll(".dd-item").forEach(d=>d.classList.remove("active"));
-  const pt=document.getElementById("projTab"); if(pt) pt.classList.remove("active");
+  setActiveNav(null);
   renderCategory(cat);
   if(location.hash!=="#"+cat.id) history.replaceState(null,"","#"+cat.id);
-  if(scroll){
-    const y = document.getElementById("navwrap").offsetTop - 60;
-    if(window.scrollY < y) window.scrollTo({top:y,behavior:"smooth"});
-  }
+  if(scroll) scrollToContent();
 }
 
 function selectProject(id,scroll=true){
   const proj = PROJECTS.find(p=>p.id===id);
   if(!proj) return;
-  document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
-  document.querySelectorAll(".dd-item").forEach(d=>d.classList.toggle("active",d.dataset.pid===id));
-  const pt=document.getElementById("projTab"); if(pt) pt.classList.add("active");
-  closeProjDD();
+  if(!LB_USER){ showProjects(scroll); return; }
+  if(LB_USER.mustChange){ renderSetPassword(); return; }
+  const isAdmin = LB_USER.role==="admin";
+  if(!isAdmin && !(LB_USER.projects||[]).includes(id)){ showProjects(scroll); return; }
+  setActiveNav("projects");
   renderProject(proj);
+  mountCommentPanel(proj.id);
   if(location.hash!=="#project-"+id) history.replaceState(null,"","#project-"+id);
-  if(scroll){
-    const y = document.getElementById("navwrap").offsetTop - 60;
-    if(window.scrollY < y) window.scrollTo({top:y,behavior:"smooth"});
-  }
+  if(scroll) scrollToContent();
+}
+
+/* ---- Comments & requests (persisted via /api/comments) ---- */
+function mountCommentPanel(projectId){
+  const content=document.getElementById("content");
+  const panel=document.createElement("div");
+  panel.className="cpanel"; panel.id="cpanel";
+  panel.innerHTML = `
+    <div class="cpanel-head">
+      <span class="eyebrow">Comments &amp; Requests</span>
+      <h3>Share notes or make a request</h3>
+      <p class="cp-sub">Everything posted here is visible to your Better Living Systems project team.</p>
+    </div>
+    <div class="cp-thread" id="cpThread"><div class="cp-loading">Loading…</div></div>
+    <form class="cp-form" id="cpForm" onsubmit="return postComment(event,'${projectId}')">
+      <div class="cp-type">
+        <label class="cp-radio"><input type="radio" name="cptype" value="comment" checked> Comment</label>
+        <label class="cp-radio"><input type="radio" name="cptype" value="request"> Request</label>
+      </div>
+      <textarea id="cpText" class="cp-text" rows="3" placeholder="Add a comment or make a request…" maxlength="2000"></textarea>
+      <div class="cp-actions">
+        <span class="cp-err" id="cpErr"></span>
+        <button type="submit" class="cp-submit" id="cpSubmit">Post</button>
+      </div>
+    </form>`;
+  content.appendChild(panel);
+  loadComments(projectId);
+}
+
+async function loadComments(projectId){
+  const thread=document.getElementById("cpThread"); if(!thread) return;
+  try{
+    const r=await fetch("/api/comments?project="+encodeURIComponent(projectId),{credentials:"same-origin"});
+    const d=await r.json();
+    if(!r.ok){ thread.innerHTML=`<div class="cp-loading">${escapeHTML(d.error||"Couldn't load comments.")}</div>`; return; }
+    renderThread(d.comments||[]);
+  }catch(e){ thread.innerHTML=`<div class="cp-loading">Network error loading comments.</div>`; }
+}
+
+function renderThread(comments){
+  const thread=document.getElementById("cpThread"); if(!thread) return;
+  if(!comments.length){ thread.innerHTML=`<div class="cp-empty">No comments yet — start the conversation.</div>`; return; }
+  thread.innerHTML = comments.map(c=>`
+    <div class="cp-item${c.type==='request'?' is-request':''}">
+      <div class="cp-meta">
+        <span class="cp-author">${escapeHTML(c.author_name||'')}</span>
+        <span class="cp-badge">${c.type==='request'?'Request':'Comment'}</span>
+        <span class="cp-time">${fmtTime(c.created_at)}</span>
+      </div>
+      <div class="cp-body">${escapeHTML(c.text||'')}</div>
+    </div>`).join("");
+}
+
+function fmtTime(iso){ try{ return new Date(iso).toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"}); }catch(e){ return ""; } }
+
+async function postComment(ev,projectId){
+  ev.preventDefault();
+  const text=document.getElementById("cpText").value.trim();
+  const type=(document.querySelector('input[name="cptype"]:checked')||{}).value||"comment";
+  const err=document.getElementById("cpErr"); const btn=document.getElementById("cpSubmit");
+  err.textContent="";
+  if(!text){ err.textContent="Write something first."; return false; }
+  btn.disabled=true; btn.textContent="Posting…";
+  try{
+    const r=await fetch("/api/comments",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({project:projectId,type,text})});
+    const d=await r.json();
+    if(!r.ok||!d.ok){ err.textContent=d.error||"Couldn't post."; btn.disabled=false; btn.textContent="Post"; return false; }
+    document.getElementById("cpText").value="";
+    await loadComments(projectId);
+  }catch(e){ err.textContent="Network error."; }
+  btn.disabled=false; btn.textContent="Post";
+  return false;
 }
 
 function goHome(){window.scrollTo({top:0,behavior:"smooth"});}
@@ -760,44 +1074,39 @@ window.addEventListener("scroll",()=>{
 
 applyLogo();
 buildTabs();
-(function routeInitial(){
-  const h = (location.hash||"").replace("#","");
-  if(h.indexOf("project-")===0){
-    const pid = h.slice("project-".length);
-    if(PROJECTS.some(p=>p.id===pid)){ selectProject(pid,false); return; }
-  }
-  selectTab(LOOMIS.some(c=>c.id===h)?h:LOOMIS[0].id,false);
-})();
 
-/* ---- Login gate (client-side soft lock; not real security) ---- */
-function loomisUnlock(){
-  var g=document.getElementById("gate");
-  if(g) g.classList.add("hidden");
-  document.body.classList.remove("locked");
+/* ---- Auth state for the Projects portal ---- */
+let LB_USER = null;
+function updateAuthUI(){
+  const label=document.getElementById("authLabel");
+  if(label) label.textContent = LB_USER ? ("Signed in · "+LB_USER.name) : "Private Client Presentation";
 }
-(function initGate(){
-  var gate=document.getElementById("gate");
-  var form=document.getElementById("gateForm");
-  var pass=document.getElementById("gatePass");
-  var user=document.getElementById("gateUser");
-  var err=document.getElementById("gateErr");
-  if(!gate||!form){ return; }
-  var unlocked=false; try{ unlocked=sessionStorage.getItem("loomis_unlocked")==="1"; }catch(e){}
-  if(unlocked){ loomisUnlock(); return; }
-  document.body.classList.add("locked");
-  form.addEventListener("submit",function(ev){
-    ev.preventDefault();
-    if(pass.value==="1111"){
-      try{ sessionStorage.setItem("loomis_unlocked","1"); }catch(e){}
-      loomisUnlock();
-    } else {
-      err.textContent="Incorrect password. Please try again.";
-      err.classList.add("show");
-      pass.value=""; pass.focus();
-    }
-  });
-  pass.addEventListener("input",function(){ err.classList.remove("show"); });
-  setTimeout(function(){ (user||pass).focus(); },60);
+async function fetchMe(){
+  try{
+    const r=await fetch("/api/me",{credentials:"same-origin"});
+    const d=await r.json();
+    LB_USER = d.user || null;
+  }catch(e){ LB_USER=null; }
+  updateAuthUI();
+}
+async function doLogout(){
+  try{ await fetch("/api/logout",{method:"POST",credentials:"same-origin"}); }catch(e){}
+  LB_USER=null; updateAuthUI(); renderLogin();
+}
+
+/* ---- Initial render + routing (concept lookbook is public; Projects is gated) ---- */
+(async function(){
+  const h=(location.hash||"").replace("#","");
+  const authRoute = (h==="projects"||h==="portfolio"||h.indexOf("project-")===0);
+  if(!authRoute){ selectTab(LOOMIS.some(c=>c.id===h)?h:LOOMIS[0].id,false); }
+  await fetchMe();
+  if(h==="portfolio"){ showPortfolio(false); }
+  else if(h==="projects"){ showProjects(false); }
+  else if(h.indexOf("project-")===0){
+    const pid=h.slice("project-".length);
+    if(LB_USER && (LB_USER.projects||[]).includes(pid)){ selectProject(pid,false); }
+    else { showProjects(false); }
+  }
 })();
 </script>
 </body>
