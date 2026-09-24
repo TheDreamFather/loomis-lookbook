@@ -2,12 +2,12 @@
 // Routes: /api/login, /api/logout, /api/me, /api/set-password, /api/comments
 //
 // Auth model:
-//  - First login uses last name + last-4-of-phone (the "PIN"), then the app forces the
-//    user to set a real password (min 8, upper, lower, number). Passwords are stored as
-//    PBKDF2-SHA256 hashes (never plaintext).
-//  - Subsequent logins use last name + the new password.
-//  - Roles: admin (all projects), sales (assigned), client (assigned + can comment/request).
-//  NOTE: still gate only non-sensitive project collaboration behind this.
+// - First login uses last name + last-4-of-phone (the "PIN"), then the app forces the
+//   user to set a real password (min 8, upper, lower, number). Passwords are stored as
+//   PBKDF2-SHA256 hashes (never plaintext).
+// - Subsequent logins use last name + the new password.
+// - Roles: admin (all projects), sales (assigned), client (assigned + can comment/request).
+//   NOTE: still gate only non-sensitive project collaboration behind this.
 
 const encoder = new TextEncoder();
 const COOKIE = "lb_session";
@@ -116,9 +116,12 @@ function publicUser(user) {
 async function currentUser(context) {
   const uid = await verifyToken(secretOf(context.env), parseCookies(context.request)[COOKIE]);
   if (!uid || !context.env.DB) return null;
-  return await context.env.DB
-    .prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password FROM users WHERE id=?")
+  const u = await context.env.DB
+    .prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password,active FROM users WHERE id=?")
     .bind(uid).first();
+  // Deactivated accounts (soft-disabled) can no longer use an existing cookie.
+  if (u && u.active === 0) return null;
+  return u;
 }
 function cookieHeader(token) {
   return `${COOKIE}=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${MAX_AGE}`;
@@ -131,7 +134,7 @@ function clearCookieHeader() {
 // "x-team-auth" header against env.TEAM_AUTH_KEY in constant time (via HMAC so
 // differing lengths don't leak). Returns { configured, ok }:
 //   configured=false → no TEAM_AUTH_KEY set on this project.
-//   ok=true          → header matches the secret.
+//   ok=true → header matches the secret.
 async function teamAuth(request, env) {
   if (!env.TEAM_AUTH_KEY) return { configured: false, ok: false };
   const provided = request.headers.get("x-team-auth") || "";
@@ -183,6 +186,8 @@ async function verifyInviteToken(secret, token){
 async function ensureUsersColumns(env){
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN email TEXT").run(); } catch(e){}
   try { await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)").run(); } catch(e){}
+  // Soft-deactivation flag (default active). Lets the CRM disable a login (e.g. clean up test invites).
+  try { await env.DB.prepare("ALTER TABLE users ADD COLUMN active INTEGER DEFAULT 1").run(); } catch(e){}
 }
 function rowToProject(r){
   return { id:r.id, address_key:r.address_key, client_name:r.client_name, address:r.address,
@@ -210,9 +215,10 @@ export async function onRequest(context) {
       if (!lastName || !password) return json({ error: "Enter your last name and password." }, 400);
 
       const user = await env.DB
-        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
+        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email,active FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
         .bind(lastName, lastName).first();
       if (!user) return json({ error: "Not recognized. Check your details or contact your rep." }, 401);
+      if (user.active === 0) return json({ error: "This account has been deactivated. Contact your rep." }, 403);
 
       const firstTime = user.must_change_password || !user.password_hash;
       let ok = false;
@@ -234,11 +240,11 @@ export async function onRequest(context) {
 
     // ---- SET / CHANGE PASSWORD ----
     // Two modes on the same URL:
-    //  A) TEAM WRITE (cross-app, e.g. the bls-sales CRM): body includes "lastName".
-    //     Requires the x-team-auth shared-secret gate. Writes to that user's
-    //     password_hash so a change made on either app stays in sync. Sets no cookie.
-    //  B) SELF-SERVICE (the lookbook's own forced-password-change): body has only
-    //     "newPassword"; the signed-in user (cookie) is the target.
+    //   A) TEAM WRITE (cross-app, e.g. the bls-sales CRM): body includes "lastName".
+    //      Requires the x-team-auth shared-secret gate. Writes to that user's
+    //      password_hash so a change made on either app stays in sync. Sets no cookie.
+    //   B) SELF-SERVICE (the lookbook's own forced-password-change): body has only
+    //      "newPassword"; the signed-in user (cookie) is the target.
     if (route === "set-password" && method === "POST") {
       const body = await request.json().catch(() => ({}));
       const newPassword = (body.newPassword || "").toString();
@@ -301,9 +307,10 @@ export async function onRequest(context) {
       const password = (body.password || "").toString();
       if (!lastName || !password) return json({ valid: false, error: "Missing credentials." }, 400);
       const user = await env.DB
-        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
+        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email,active FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
         .bind(lastName, lastName).first();
       if (!user) return json({ valid: false });
+      if (user.active === 0) return json({ valid: false, deactivated: true });
       const firstTime = user.must_change_password || !user.password_hash;
       const ok = firstTime ? (password === String(user.last4)) : await verifyPassword(password, user.password_hash);
       if (!ok) return json({ valid: false });
@@ -339,7 +346,6 @@ export async function onRequest(context) {
         return json({ ok: true, comment: { author_name: author, role: user.role, type, text, created_at: now } });
       }
     }
-
 
     // ---- CATEGORIES (public: authoritative system list for the CRM checkboxes) ----
     if (route === "categories" && method === "GET") {
@@ -403,7 +409,6 @@ export async function onRequest(context) {
       }
     }
 
-
     // ---- CREATE USER (team-auth): provision a user for an emailed invite ----
     if (route === "users" && method === "POST") {
       const gate = await teamAuth(request, env);
@@ -429,6 +434,29 @@ export async function onRequest(context) {
       return json({ ok: true, user_id: uid, role, token, accept_url });
     }
 
+    // ---- DEACTIVATE / REACTIVATE USER (team-auth): soft-disable a login ----
+    // Used by the CRM admin Users list (e.g. to clean up test invites). Sets the
+    // users.active flag; deactivated users can no longer log in or use a cookie.
+    // Body: { user_id } | { email } | { last_name }, optional { action: "reactivate" }.
+    if (route === "users/deactivate" && method === "POST") {
+      const gate = await teamAuth(request, env);
+      if (!gate.configured) return json({ ok: false, error: "Team auth not configured on this project." }, 403);
+      if (!gate.ok) return json({ ok: false, error: "Unauthorized caller." }, 401);
+      const b = await request.json().catch(() => ({}));
+      const active = b.action === "reactivate" ? 1 : 0;
+      let user = null;
+      if (b.user_id != null && String(b.user_id).trim()) {
+        user = await env.DB.prepare("SELECT id,name,email FROM users WHERE id=?").bind(String(b.user_id).trim()).first();
+      } else if (b.email) {
+        user = await env.DB.prepare("SELECT id,name,email FROM users WHERE lower(email)=lower(?)").bind(String(b.email).trim()).first();
+      } else if (b.last_name) {
+        user = await env.DB.prepare("SELECT id,name,email FROM users WHERE lower(last_name)=lower(?)").bind(String(b.last_name).trim()).first();
+      }
+      if (!user) return json({ ok: false, error: "User not found." }, 404);
+      await env.DB.prepare("UPDATE users SET active=? WHERE id=?").bind(active, user.id).run();
+      return json({ ok: true, user_id: user.id, active });
+    }
+
     // ---- ACCEPT INVITE (public; signed-token gated): set password from the emailed link ----
     if (route === "accept-invite" && method === "POST") {
       const b = await request.json().catch(() => ({}));
@@ -438,8 +466,9 @@ export async function onRequest(context) {
       if (!uid) return json({ ok: false, error: "This invite link is invalid or has expired." }, 400);
       const issue = passwordIssue(newPassword);
       if (issue) return json({ ok: false, error: `Password needs ${issue}.` }, 400);
-      const user = await env.DB.prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password FROM users WHERE id=?").bind(uid).first();
+      const user = await env.DB.prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password,active FROM users WHERE id=?").bind(uid).first();
       if (!user) return json({ ok: false, error: "Account not found." }, 404);
+      if (user.active === 0) return json({ ok: false, error: "This invite has been deactivated. Contact your rep." }, 403);
       const hash = await hashPassword(newPassword);
       await env.DB.prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?").bind(hash, uid).run();
       const stoken = await makeToken(secretOf(env), user.id);
