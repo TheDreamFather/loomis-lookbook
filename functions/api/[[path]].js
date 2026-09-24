@@ -166,6 +166,24 @@ async function ensureProjectsTable(env){
     systems TEXT, items TEXT, photos TEXT, created_at TEXT, updated_at TEXT
   )`).run();
 }
+async function makeInviteToken(secret, userId, ttlMs){
+  const exp = Date.now() + (ttlMs || 7*24*60*60*1000);
+  const body = `${userId}.${exp}.inv`;
+  return `${body}.${await hmacHex(secret, body)}`;
+}
+async function verifyInviteToken(secret, token){
+  if(!token) return null;
+  const parts = String(token).split(".");
+  if(parts.length !== 4) return null;
+  const [userId, exp, tag, sig] = parts;
+  if(tag !== "inv" || !userId || !exp || Date.now() > Number(exp)) return null;
+  const expected = await hmacHex(secret, `${userId}.${exp}.inv`);
+  return timingSafeEqualHex(expected, sig) ? userId : null;
+}
+async function ensureUsersColumns(env){
+  try { await env.DB.prepare("ALTER TABLE users ADD COLUMN email TEXT").run(); } catch(e){}
+  try { await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)").run(); } catch(e){}
+}
 function rowToProject(r){
   return { id:r.id, address_key:r.address_key, client_name:r.client_name, address:r.address,
     systems:safeJSON(r.systems,[]), items:safeJSON(r.items,[]), photos:safeJSON(r.photos,[]),
@@ -183,6 +201,7 @@ export async function onRequest(context) {
   }
 
   try {
+    await ensureUsersColumns(env);
     // ---- LOGIN (last name + password; password = last-4 PIN on first login) ----
     if (route === "login" && method === "POST") {
       const body = await request.json().catch(() => ({}));
@@ -191,8 +210,8 @@ export async function onRequest(context) {
       if (!lastName || !password) return json({ error: "Enter your last name and password." }, 400);
 
       const user = await env.DB
-        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password FROM users WHERE lower(last_name)=lower(?)")
-        .bind(lastName).first();
+        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
+        .bind(lastName, lastName).first();
       if (!user) return json({ error: "Not recognized. Check your details or contact your rep." }, 401);
 
       const firstTime = user.must_change_password || !user.password_hash;
@@ -282,8 +301,8 @@ export async function onRequest(context) {
       const password = (body.password || "").toString();
       if (!lastName || !password) return json({ valid: false, error: "Missing credentials." }, 400);
       const user = await env.DB
-        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password FROM users WHERE lower(last_name)=lower(?)")
-        .bind(lastName).first();
+        .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
+        .bind(lastName, lastName).first();
       if (!user) return json({ valid: false });
       const firstTime = user.must_change_password || !user.password_hash;
       const ok = firstTime ? (password === String(user.last4)) : await verifyPassword(password, user.password_hash);
@@ -382,6 +401,49 @@ export async function onRequest(context) {
           .bind(id, key, client, addr, JSON.stringify(systems), JSON.stringify(items), JSON.stringify([]), now, now).run();
         return json({ ok: true, project_id: id, created: true });
       }
+    }
+
+
+    // ---- CREATE USER (team-auth): provision a user for an emailed invite ----
+    if (route === "users" && method === "POST") {
+      const gate = await teamAuth(request, env);
+      if (gate.configured && !gate.ok) return json({ error: "Unauthorized caller." }, 401);
+      const b = await request.json().catch(() => ({}));
+      const name = (b.name || "").toString().trim();
+      const email = (b.email || "").toString().trim().toLowerCase();
+      const lastName = (b.last_name || "").toString().trim() || (name ? name.split(/\s+/).slice(-1)[0] : "");
+      const role = ["admin", "sales", "client"].includes(b.role) ? b.role : "client";
+      const projectIds = (b.project_ids || "").toString().trim();
+      const last4 = (b.last4 || "").toString().replace(/\D/g, "").slice(-4);
+      if (!name && !email) return json({ error: "A name or email is required." }, 400);
+      if (email) {
+        const dup = await env.DB.prepare("SELECT id FROM users WHERE lower(email)=lower(?)").bind(email).first();
+        if (dup) return json({ error: "A user with that email already exists.", user_id: dup.id }, 409);
+      }
+      const res = await env.DB
+        .prepare("INSERT INTO users (last_name,last4,role,name,project_ids,email,must_change_password) VALUES (?,?,?,?,?,?,1)")
+        .bind(lastName || "", last4 || "", role, name || "", projectIds || "", email || null).run();
+      const uid = res.meta.last_row_id;
+      const token = await makeInviteToken(secretOf(env), uid);
+      const accept_url = new URL(request.url).origin + "/invite.html?token=" + encodeURIComponent(token);
+      return json({ ok: true, user_id: uid, role, token, accept_url });
+    }
+
+    // ---- ACCEPT INVITE (public; signed-token gated): set password from the emailed link ----
+    if (route === "accept-invite" && method === "POST") {
+      const b = await request.json().catch(() => ({}));
+      const token = (b.token || "").toString();
+      const newPassword = (b.newPassword || "").toString();
+      const uid = await verifyInviteToken(secretOf(env), token);
+      if (!uid) return json({ ok: false, error: "This invite link is invalid or has expired." }, 400);
+      const issue = passwordIssue(newPassword);
+      if (issue) return json({ ok: false, error: `Password needs ${issue}.` }, 400);
+      const user = await env.DB.prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password FROM users WHERE id=?").bind(uid).first();
+      if (!user) return json({ ok: false, error: "Account not found." }, 404);
+      const hash = await hashPassword(newPassword);
+      await env.DB.prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?").bind(hash, uid).run();
+      const stoken = await makeToken(secretOf(env), user.id);
+      return json({ ok: true, user: publicUser(user) }, 200, { "set-cookie": cookieHeader(stoken) });
     }
 
     return json({ error: "Not found." }, 404);
