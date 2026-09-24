@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Set your password — Better Living Systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{--bg:#060605;--panel:#0f0f0e;--line:rgba(239,233,221,.14);--ivory:#efe9dd;--muted:#8c867a;--accent:#b99a63;--accent2:#cbb488;--red:#d98d88;--green:#93c0a3;--serif:'Instrument Serif',Georgia,serif;--sans:'Inter Tight','Helvetica Neue',Arial,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--ivory);font-family:var(--sans);font-weight:300;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{width:100%;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:30px 28px}
+  .eyebrow{font-size:10px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted)}
+  h1{font-family:var(--serif);font-weight:400;font-size:30px;margin:6px 0 4px}
+  p.sub{color:var(--muted);font-size:13px;margin-bottom:20px}
+  label{display:block;font-size:12px;color:var(--muted);margin:14px 0 5px}
+  input{width:100%;background:#161614;border:1px solid var(--line);border-radius:9px;color:var(--ivory);padding:11px 12px;font-family:var(--sans);font-size:14px}
+  input:focus{outline:none;border-color:var(--accent)}
+  button{width:100%;margin-top:20px;background:linear-gradient(150deg,var(--accent2),var(--accent));border:none;border-radius:100px;color:#151310;padding:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.6px;font-size:11px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .msg{margin-top:14px;font-size:13px}
+  .err{color:var(--red)} .ok{color:var(--green)}
+  .rule{font-size:11.5px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="eyebrow">Better Living Systems</div>
+    <h1>Set your password</h1>
+    <p class="sub">Welcome. Create a password to access your project portal.</p>
+    <div id="form">
+      <label for="pw">New password</label>
+      <input id="pw" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+      <label for="pw2">Confirm password</label>
+      <input id="pw2" type="password" autocomplete="new-password">
+      <div class="rule">Use at least 8 characters, with an uppercase letter, a lowercase letter, and a number.</div>
+      <button id="go">Set password &amp; continue</button>
+      <div class="msg" id="msg"></div>
+    </div>
+  </div>
+<script>
+  var token = new URLSearchParams(location.search).get('token') || '';
+  var msg = document.getElementById('msg');
+  if (!token) { msg.className='msg err'; msg.textContent='This invite link is missing its token. Ask your rep to resend it.'; document.getElementById('go').disabled=true; }
+  document.getElementById('go').onclick = async function(){
+    var pw = document.getElementById('pw').value, pw2 = document.getElementById('pw2').value;
+    msg.className='msg'; msg.textContent='';
+    if (pw !== pw2) { msg.className='msg err'; msg.textContent='Passwords do not match.'; return; }
+    if (pw.length < 8) { msg.className='msg err'; msg.textContent='Password must be at least 8 characters.'; return; }
+    var btn = document.getElementById('go'); btn.disabled = true; btn.textContent='Setting…';
+    try {
+      var r = await fetch('/api/accept-invite', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ token: token, newPassword: pw }) });
+      var d = await r.json();
+      if (d.ok) { msg.className='msg ok'; msg.textContent='Password set. Taking you to your portal…'; setTimeout(function(){ location.href='/'; }, 1200); }
+      else { msg.className='msg err'; msg.textContent = d.error || 'Could not set your password.'; btn.disabled=false; btn.textContent='Set password & continue'; }
+    } catch(e){ msg.className='msg err'; msg.textContent='Network error — try again.'; btn.disabled=false; btn.textContent='Set password & continue'; }
+  };
+</script>
+</body>
+</html>
