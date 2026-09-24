@@ -161,7 +161,7 @@ const LOOKBOOK_CATEGORIES = [
 function normAddress(a){return String(a||"").toLowerCase().replace(/[.,#]/g," ").replace(/\s+/g," ").trim();}
 function safeJSON(s,f){try{const v=JSON.parse(s);return v==null?f:v;}catch(e){return f;}}
 async function ensureProjectsTable(env){
-  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS projects (
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS crm_projects (
     id TEXT PRIMARY KEY, address_key TEXT UNIQUE, client_name TEXT, address TEXT,
     systems TEXT, items TEXT, photos TEXT, created_at TEXT, updated_at TEXT
   )`).run();
@@ -334,7 +334,7 @@ export async function onRequest(context) {
         const gate = await teamAuth(request, env);
         const user = await currentUser(context);
         if (!gate.ok && !(user && user.role === "admin")) return json({ error: "Unauthorized." }, 401);
-        const { results } = await env.DB.prepare("SELECT * FROM projects ORDER BY updated_at DESC").all();
+        const { results } = await env.DB.prepare("SELECT * FROM crm_projects ORDER BY updated_at DESC").all();
         return json({ projects: (results || []).map(rowToProject) });
       }
       if (method === "POST") {
@@ -349,18 +349,18 @@ export async function onRequest(context) {
         const systems = Array.isArray(b.systems) ? b.systems.map(String) : [];
         const client = (b.client_name || "").toString().trim();
         const now = new Date().toISOString();
-        const existing = await env.DB.prepare("SELECT * FROM projects WHERE address_key=?").bind(key).first();
+        const existing = await env.DB.prepare("SELECT * FROM crm_projects WHERE address_key=?").bind(key).first();
 
         if (action === "remove") {
           if (!existing) return json({ ok: true, removed: false });
           let items = safeJSON(existing.items, []).filter((it) => String(it.lead_id) !== leadId);
           if (!items.length) {
-            await env.DB.prepare("DELETE FROM projects WHERE address_key=?").bind(key).run();
+            await env.DB.prepare("DELETE FROM crm_projects WHERE address_key=?").bind(key).run();
             return json({ ok: true, deletedProject: true });
           }
           const mergedSys = [...new Set(items.flatMap((it) => it.systems || []))];
           const photos = safeJSON(existing.photos, []).filter((ph) => String(ph.lead_id) !== leadId);
-          await env.DB.prepare("UPDATE projects SET systems=?,items=?,photos=?,updated_at=? WHERE address_key=?")
+          await env.DB.prepare("UPDATE crm_projects SET systems=?,items=?,photos=?,updated_at=? WHERE address_key=?")
             .bind(JSON.stringify(mergedSys), JSON.stringify(items), JSON.stringify(photos), now, key).run();
           return json({ ok: true, project_id: existing.id, removed: true });
         }
@@ -372,13 +372,13 @@ export async function onRequest(context) {
           const item = { lead_id: leadId, systems, value: Number(b.value) || 0, client_name: client, sold_at: now };
           if (idx >= 0) items[idx] = { ...items[idx], ...item }; else items.push(item);
           const mergedSys = [...new Set(items.flatMap((it) => it.systems || []))];
-          await env.DB.prepare("UPDATE projects SET client_name=CASE WHEN client_name IS NULL OR client_name='' THEN ? ELSE client_name END, systems=?, items=?, updated_at=? WHERE address_key=?")
+          await env.DB.prepare("UPDATE crm_projects SET client_name=CASE WHEN client_name IS NULL OR client_name='' THEN ? ELSE client_name END, systems=?, items=?, updated_at=? WHERE address_key=?")
             .bind(client, JSON.stringify(mergedSys), JSON.stringify(items), now, key).run();
           return json({ ok: true, project_id: existing.id, appended: true });
         }
         const id = "p-" + key.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) + "-" + Math.random().toString(36).slice(2, 6);
         const items = [{ lead_id: leadId, systems, value: Number(b.value) || 0, client_name: client, sold_at: now }];
-        await env.DB.prepare("INSERT INTO projects (id,address_key,client_name,address,systems,items,photos,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
+        await env.DB.prepare("INSERT INTO crm_projects (id,address_key,client_name,address,systems,items,photos,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
           .bind(id, key, client, addr, JSON.stringify(systems), JSON.stringify(items), JSON.stringify([]), now, now).run();
         return json({ ok: true, project_id: id, created: true });
       }
