@@ -169,6 +169,40 @@ async function ensureProjectsTable(env){
     systems TEXT, items TEXT, photos TEXT, created_at TEXT, updated_at TEXT
   )`).run();
 }
+// ---- Scope viewer (room-by-room proposal) persistence ----
+// A scope project (e.g. Loomis Isleworth) has rooms; each room = one drawing +
+// free-text scope + an array of pinned call-outs {label,measurement,products,x,y}.
+// Call-outs are stored as a JSON blob on the room row (whole-room save keeps the
+// collaborative read/write simple: GET the project, PUT a room).
+async function ensureScopeTables(env){
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_projects (
+    id TEXT PRIMARY KEY, name TEXT, created_at TEXT, updated_at TEXT
+  )`).run();
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_rooms (
+    id TEXT PRIMARY KEY, project_id TEXT, name TEXT, drawing_url TEXT,
+    scope_text TEXT, callouts TEXT, sort INTEGER DEFAULT 0,
+    updated_at TEXT, updated_by TEXT
+  )`).run();
+  // Seed the Loomis Isleworth project + its starter rooms once.
+  const seeded = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
+  if (!seeded) {
+    const now = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)")
+      .bind("loomis-isleworth","Loomis Isleworth",now,now).run();
+    const rooms = ["Great Room","Primary Bedroom","Theater","Kitchen","Covered Patio"];
+    for (let i=0;i<rooms.length;i++){
+      await env.DB.prepare("INSERT INTO scope_rooms (id,project_id,name,drawing_url,scope_text,callouts,sort,updated_at) VALUES (?,?,?,?,?,?,?,?)")
+        .bind("room-"+Date.now()+"-"+i,"loomis-isleworth",rooms[i],null,"","[]",i,now).run();
+    }
+  }
+}
+function rowToScopeRoom(r){
+  return { id:r.id, project_id:r.project_id, name:r.name, drawing_url:r.drawing_url||null,
+    scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), sort:r.sort||0,
+    updated_at:r.updated_at, updated_by:r.updated_by||null };
+}
+// Editing the scope is for working staff (admin/sales); clients are view-only.
+function canEditScope(user){ return !!user && (user.role === "admin" || user.role === "sales"); }
 async function makeInviteToken(secret, userId, ttlMs){
   const exp = Date.now() + (ttlMs || 7*24*60*60*1000);
   const body = `${userId}.${exp}.inv`;
@@ -473,6 +507,70 @@ export async function onRequest(context) {
       await env.DB.prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?").bind(hash, uid).run();
       const stoken = await makeToken(secretOf(env), user.id);
       return json({ ok: true, user: publicUser(user) }, 200, { "set-cookie": cookieHeader(stoken) });
+    }
+
+    // ================= SCOPE VIEWER (room-by-room proposal) =================
+    // Read a scope project (rooms + scope + call-outs). Any signed-in user.
+    if (route === "scope" && method === "GET") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const pid = (url.searchParams.get("project") || "loomis-isleworth").trim();
+      const proj = await env.DB.prepare("SELECT * FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!proj) return json({ error: "Project not found." }, 404);
+      const { results } = await env.DB.prepare("SELECT * FROM scope_rooms WHERE project_id=? ORDER BY sort ASC, name ASC").bind(pid).all();
+      return json({
+        project: { id: proj.id, name: proj.name },
+        can_edit: canEditScope(user),
+        rooms: (results || []).map(rowToScopeRoom)
+      });
+    }
+    // Create a room. Team only.
+    if (route === "scope/room" && method === "POST") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only — ask a BLS team member to edit." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const pid = (b.project || "loomis-isleworth").toString().trim();
+      const now = new Date().toISOString();
+      const id = "room-" + Date.now() + "-" + Math.floor(Math.random()*1000);
+      const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM scope_rooms WHERE project_id=?").bind(pid).first();
+      await env.DB.prepare("INSERT INTO scope_rooms (id,project_id,name,drawing_url,scope_text,callouts,sort,updated_at,updated_by) VALUES (?,?,?,?,?,?,?,?,?)")
+        .bind(id, pid, (b.name||"New Room").toString().slice(0,120), null, "", "[]", (cnt&&cnt.n)||0, now, user.name||user.last_name).run();
+      return json({ ok: true, id });
+    }
+    // Update a room (name / drawing_url / scope_text / callouts). Team only.
+    if (route === "scope/room" && method === "PUT") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only — ask a BLS team member to edit." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const id = (b.id || "").toString().trim();
+      if (!id) return json({ error: "Room id required." }, 400);
+      const existing = await env.DB.prepare("SELECT id FROM scope_rooms WHERE id=?").bind(id).first();
+      if (!existing) return json({ error: "Room not found." }, 404);
+      const now = new Date().toISOString();
+      const callouts = JSON.stringify(Array.isArray(b.callouts) ? b.callouts : []);
+      await env.DB.prepare(`UPDATE scope_rooms SET
+          name=COALESCE(?,name), drawing_url=?, scope_text=?, callouts=?, sort=COALESCE(?,sort),
+          updated_at=?, updated_by=? WHERE id=?`)
+        .bind(b.name!=null?String(b.name).slice(0,120):null, b.drawing_url!=null?String(b.drawing_url).slice(0,1000):null,
+          (b.scope_text!=null?String(b.scope_text):"").slice(0,20000), callouts,
+          b.sort!=null?Number(b.sort):null, now, user.name||user.last_name, id).run();
+      return json({ ok: true, updated_at: now, updated_by: user.name||user.last_name });
+    }
+    // Delete a room. Team only.
+    if (route === "scope/room" && method === "DELETE") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only." }, 403);
+      const id = (url.searchParams.get("id") || "").trim();
+      if (!id) return json({ error: "Room id required." }, 400);
+      await env.DB.prepare("DELETE FROM scope_rooms WHERE id=?").bind(id).run();
+      return json({ ok: true });
     }
 
     return json({ error: "Not found." }, 404);
