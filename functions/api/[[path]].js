@@ -195,6 +195,13 @@ async function ensureScopeTables(env){
   try { await env.DB.prepare("ALTER TABLE scope_rooms ADD COLUMN line_items TEXT").run(); } catch(e){}
   // Small key/value table for one-time scope migrations.
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_meta (key TEXT PRIMARY KEY, value TEXT)`).run();
+  // Rendered plan pages (from a dropped RCP PDF). Stored as a downscaled JPEG BLOB in D1
+  // (no R2 binding exists yet). One row per page; rooms reference /api/scope/plan/<id>,
+  // so a floor image is stored once and shared across all its rooms (no duplication).
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_plans (
+    id TEXT PRIMARY KEY, project_id TEXT, label TEXT, page_no INTEGER,
+    mime TEXT, img BLOB, created_at TEXT, created_by TEXT
+  )`).run();
   const now = new Date().toISOString();
   // Ensure the project row exists.
   const proj = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
@@ -626,6 +633,77 @@ export async function onRequest(context) {
       const now = new Date().toISOString();
       await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)").bind(id, name, now, now).run();
       return json({ ok: true, id, name });
+    }
+
+    // ---- Scope plans (rendered RCP pages) ----
+    // Serve a stored plan page image (used as a room's drawing_url). Signed-in users.
+    if (route.startsWith("scope/plan/") && method === "GET") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const id = route.slice("scope/plan/".length);
+      const row = await env.DB.prepare("SELECT mime, img FROM scope_plans WHERE id=?").bind(id).first();
+      if (!row || !row.img) return json({ error: "Not found." }, 404);
+      const bytes = (row.img instanceof ArrayBuffer) ? new Uint8Array(row.img) : row.img;
+      return new Response(bytes, { headers: { "content-type": row.mime || "image/jpeg", "cache-control": "public, max-age=31536000" } });
+    }
+    // List plan pages for a project (metadata only, no image bytes). Signed-in users.
+    if (route === "scope/plans" && method === "GET") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const pid = (url.searchParams.get("project") || "loomis-isleworth").trim();
+      const { results } = await env.DB.prepare("SELECT id, label, page_no FROM scope_plans WHERE project_id=? ORDER BY page_no ASC, created_at ASC").bind(pid).all();
+      return json({ plans: (results||[]).map(r => ({ id:r.id, label:r.label, page_no:r.page_no, url:`/api/scope/plan/${r.id}` })) });
+    }
+    // Save a rendered plan page (downscaled JPEG data URL). Team only.
+    if (route === "scope/plan" && method === "POST") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const pid = (b.project || "loomis-isleworth").toString().trim();
+      const dataUrl = (b.data_url || "").toString();
+      const m = /^data:([^;]+);base64,(.*)$/s.exec(dataUrl);
+      if (!m) return json({ error: "Expected a base64 image data URL." }, 400);
+      const mime = m[1]; const b64 = m[2];
+      const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      if (bin.length > 950000) return json({ error: "Rendered page too large — downscale further (keep under ~0.9 MB).", size: bin.length }, 413);
+      const id = "plan-" + Date.now().toString(36) + "-" + Math.floor(Math.random()*1000);
+      const now = new Date().toISOString();
+      await env.DB.prepare("INSERT INTO scope_plans (id,project_id,label,page_no,mime,img,created_at,created_by) VALUES (?,?,?,?,?,?,?,?)")
+        .bind(id, pid, (b.label||"Plan page").toString().slice(0,120), Number(b.page_no)||0, mime, bin, now, user.name||user.last_name).run();
+      return json({ ok: true, id, url: `/api/scope/plan/${id}` });
+    }
+    // Bulk-assign a drawing URL to rooms (by explicit ids or by floor). Team only.
+    if (route === "scope/assign-drawing" && method === "POST") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const pid = (b.project || "loomis-isleworth").toString().trim();
+      const durl = (b.drawing_url || "").toString().slice(0,1000);
+      if (!durl) return json({ error: "drawing_url required." }, 400);
+      const now = new Date().toISOString();
+      let n = 0;
+      if (Array.isArray(b.room_ids) && b.room_ids.length) {
+        for (const rid of b.room_ids) {
+          const r = await env.DB.prepare("UPDATE scope_rooms SET drawing_url=?, updated_at=?, updated_by=? WHERE id=? AND project_id=?")
+            .bind(durl, now, user.name||user.last_name, String(rid), pid).run();
+          n += (r.meta && r.meta.changes) || 0;
+        }
+      } else if (b.floor) {
+        const r = await env.DB.prepare("UPDATE scope_rooms SET drawing_url=?, updated_at=?, updated_by=? WHERE project_id=? AND floor=?")
+          .bind(durl, now, user.name||user.last_name, pid, String(b.floor)).run();
+        n = (r.meta && r.meta.changes) || 0;
+      } else if (b.all) {
+        const r = await env.DB.prepare("UPDATE scope_rooms SET drawing_url=?, updated_at=?, updated_by=? WHERE project_id=?")
+          .bind(durl, now, user.name||user.last_name, pid).run();
+        n = (r.meta && r.meta.changes) || 0;
+      }
+      return json({ ok: true, assigned: n });
     }
 
     return json({ error: "Not found." }, 404);
