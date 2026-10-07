@@ -819,6 +819,7 @@ function catalogCardHTML(p){
     : `<div class="pcard-media"><div class="media-fallback">${iconImage()}<span>Cover Placeholder</span></div></div>`;
   const flag = p.placeholder ? `<span class="pcard-flag">Sample</span>` : "";
   const meta = `${photoCount} photo${photoCount!==1?'s':''}${deviceCount?` &middot; ${deviceCount} tagged`:''}`;
+  const scopeHref = `/isleworth.html?project=${encodeURIComponent(p.id)}&name=${encodeURIComponent(p.title)}`;
   return `<button class="pcard" onclick="selectProject('${p.id}')" aria-label="Open ${escapeAttr(p.title)}">
       ${media}${flag}
       <div class="pcard-body">
@@ -826,6 +827,7 @@ function catalogCardHTML(p){
         <div class="pcard-title">${escapeHTML(p.title)}</div>
         ${p.subtitle?`<div class="pcard-sub">${escapeHTML(p.subtitle)}</div>`:""}
         <div class="pcard-meta"><span>${meta}</span><span class="go">View <span class="arrow">&rarr;</span></span></div>
+        <div class="pcard-meta" style="margin-top:6px;border-top:1px solid var(--line,#2a2720);padding-top:7px"><span style="color:var(--muted,#9a9388);font-size:11px">Scope-by-Room</span><span class="go" style="color:#cbb488" onclick="event.stopPropagation();location.href='${scopeHref}'">Open scope <span class="arrow">&rarr;</span></span></div>
       </div>
     </button>`;
 }
