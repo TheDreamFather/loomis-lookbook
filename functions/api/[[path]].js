@@ -187,11 +187,12 @@ async function ensureScopeTables(env){
   )`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_rooms (
     id TEXT PRIMARY KEY, project_id TEXT, name TEXT, floor TEXT, drawing_url TEXT,
-    scope_text TEXT, callouts TEXT, sort INTEGER DEFAULT 0,
+    scope_text TEXT, callouts TEXT, line_items TEXT, sort INTEGER DEFAULT 0,
     updated_at TEXT, updated_by TEXT
   )`).run();
-  // Add the floor column on pre-existing DBs (ignore if it already exists).
+  // Add newer columns on pre-existing DBs (ignore if they already exist).
   try { await env.DB.prepare("ALTER TABLE scope_rooms ADD COLUMN floor TEXT").run(); } catch(e){}
+  try { await env.DB.prepare("ALTER TABLE scope_rooms ADD COLUMN line_items TEXT").run(); } catch(e){}
   // Small key/value table for one-time scope migrations.
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_meta (key TEXT PRIMARY KEY, value TEXT)`).run();
   const now = new Date().toISOString();
@@ -218,7 +219,7 @@ async function ensureScopeTables(env){
 }
 function rowToScopeRoom(r){
   return { id:r.id, project_id:r.project_id, name:r.name, floor:r.floor||null, drawing_url:r.drawing_url||null,
-    scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), sort:r.sort||0,
+    scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), line_items:safeJSON(r.line_items,[]), sort:r.sort||0,
     updated_at:r.updated_at, updated_by:r.updated_by||null };
 }
 // Editing the scope is for working staff (admin/sales); clients are view-only.
@@ -536,8 +537,15 @@ export async function onRequest(context) {
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in." }, 401);
       const pid = (url.searchParams.get("project") || "loomis-isleworth").trim();
-      const proj = await env.DB.prepare("SELECT * FROM scope_projects WHERE id=?").bind(pid).first();
-      if (!proj) return json({ error: "Project not found." }, 404);
+      let proj = await env.DB.prepare("SELECT * FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!proj) {
+        // Reusable per-project tool: first visit lazily creates an empty scope workspace.
+        if (!canEditScope(user)) return json({ error: "No scope workspace for this project yet." }, 404);
+        const nm = (url.searchParams.get("name") || pid).toString().slice(0,160);
+        const now0 = new Date().toISOString();
+        await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)").bind(pid, nm, now0, now0).run();
+        proj = { id: pid, name: nm };
+      }
       const { results } = await env.DB.prepare("SELECT * FROM scope_rooms WHERE project_id=? ORDER BY sort ASC, name ASC").bind(pid).all();
       return json({
         project: { id: proj.id, name: proj.name },
@@ -556,8 +564,8 @@ export async function onRequest(context) {
       const now = new Date().toISOString();
       const id = "room-" + Date.now() + "-" + Math.floor(Math.random()*1000);
       const cnt = await env.DB.prepare("SELECT COUNT(*) AS n FROM scope_rooms WHERE project_id=?").bind(pid).first();
-      await env.DB.prepare("INSERT INTO scope_rooms (id,project_id,name,drawing_url,scope_text,callouts,sort,updated_at,updated_by) VALUES (?,?,?,?,?,?,?,?,?)")
-        .bind(id, pid, (b.name||"New Room").toString().slice(0,120), null, "", "[]", (cnt&&cnt.n)||0, now, user.name||user.last_name).run();
+      await env.DB.prepare("INSERT INTO scope_rooms (id,project_id,name,floor,drawing_url,scope_text,callouts,line_items,sort,updated_at,updated_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)")
+        .bind(id, pid, (b.name||"New Room").toString().slice(0,120), (b.floor||null), null, "", "[]", "[]", (cnt&&cnt.n)||0, now, user.name||user.last_name).run();
       return json({ ok: true, id });
     }
     // Update a room (name / drawing_url / scope_text / callouts). Team only.
@@ -573,11 +581,13 @@ export async function onRequest(context) {
       if (!existing) return json({ error: "Room not found." }, 404);
       const now = new Date().toISOString();
       const callouts = JSON.stringify(Array.isArray(b.callouts) ? b.callouts : []);
+      const lineItems = JSON.stringify(Array.isArray(b.line_items) ? b.line_items : []);
       await env.DB.prepare(`UPDATE scope_rooms SET
-          name=COALESCE(?,name), drawing_url=?, scope_text=?, callouts=?, sort=COALESCE(?,sort),
+          name=COALESCE(?,name), floor=COALESCE(?,floor), drawing_url=?, scope_text=?, callouts=?, line_items=?, sort=COALESCE(?,sort),
           updated_at=?, updated_by=? WHERE id=?`)
-        .bind(b.name!=null?String(b.name).slice(0,120):null, b.drawing_url!=null?String(b.drawing_url).slice(0,1000):null,
-          (b.scope_text!=null?String(b.scope_text):"").slice(0,20000), callouts,
+        .bind(b.name!=null?String(b.name).slice(0,120):null, (b.floor!=null?String(b.floor).slice(0,40):null),
+          b.drawing_url!=null?String(b.drawing_url).slice(0,1000):null,
+          (b.scope_text!=null?String(b.scope_text):"").slice(0,20000), callouts, lineItems,
           b.sort!=null?Number(b.sort):null, now, user.name||user.last_name, id).run();
       return json({ ok: true, updated_at: now, updated_by: user.name||user.last_name });
     }
@@ -591,6 +601,31 @@ export async function onRequest(context) {
       if (!id) return json({ error: "Room id required." }, 400);
       await env.DB.prepare("DELETE FROM scope_rooms WHERE id=?").bind(id).run();
       return json({ ok: true });
+    }
+
+    // List all scope projects (for the project switcher). Any signed-in user.
+    if (route === "scope/projects" && method === "GET") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const { results } = await env.DB.prepare("SELECT id,name,updated_at FROM scope_projects ORDER BY name ASC").all();
+      return json({ projects: results || [], can_edit: canEditScope(user) });
+    }
+    // Create a new scope project (reusable tool). Team only.
+    if (route === "scope/project" && method === "POST") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const name = (b.name || "").toString().trim();
+      if (!name) return json({ error: "Project name required." }, 400);
+      let id = (b.id || name).toString().toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,"").slice(0,80) || ("scope-"+Date.now());
+      const dup = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind(id).first();
+      if (dup) id = id + "-" + Date.now().toString(36);
+      const now = new Date().toISOString();
+      await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)").bind(id, name, now, now).run();
+      return json({ ok: true, id, name });
     }
 
     return json({ error: "Not found." }, 404);
