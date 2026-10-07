@@ -1,3 +1,7 @@
+https://raw.githubusercontent.com/TheDreamFather/loomis-lookbook/main/index.html
+→ https://raw.githubusercontent.com/TheDreamFather/loomis-lookbook/main/index.html
+Content-Type: text/plain; charset=utf-8
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -826,6 +830,20 @@ function catalogCardHTML(p){
     </button>`;
 }
 
+// Working-project card for the Loomis Isleworth room-by-room scope viewer.
+// Opens the persistent scope page rather than a photo gallery. Team-only.
+function isleworthCardHTML(){
+  return `<button class="pcard" onclick="location.href='/isleworth.html'" aria-label="Open Loomis Isleworth Scope">
+      <div class="pcard-media"><div class="media-fallback">${iconImage()}<span>Room-by-Room Scope</span></div></div>
+      <span class="pcard-flag" style="background:#b99a63;color:#1a150c">Working</span>
+      <div class="pcard-body">
+        <div class="pcard-brand">Active Project &middot; Isleworth</div>
+        <div class="pcard-title">Loomis Isleworth</div>
+        <div class="pcard-sub">Full-scope, room-by-room — drawings, scope &amp; call-outs. Editable by the team.</div>
+        <div class="pcard-meta"><span>Scope viewer</span><span class="go">Open <span class="arrow">&rarr;</span></span></div>
+      </div>
+    </button>`;
+}
 function renderCatalog(ids){
   const list = ids ? PROJECTS.filter(p=>ids.includes(p.id)) : PROJECTS;
   const cards = list.length
@@ -975,8 +993,11 @@ function renderProjectsHome(scroll=true){
     : (LB_USER.role==="sales"
         ? "Projects assigned to you. Open one to review its gallery and the client's comments &amp; requests."
         : "Your project lookbook. Open a project to view its gallery and leave comments or requests.");
-  const grid = mine.length
-    ? (isAdmin ? renderCatalog() : renderCatalog(LB_USER.projects||[]))
+  const isTeam = isAdmin || LB_USER.role==="sales";
+  const scopeCard = isTeam ? isleworthCardHTML() : "";
+  const cards = (isAdmin ? PROJECTS : mine).map(catalogCardHTML).join("");
+  const grid = (scopeCard || cards)
+    ? `<div class="cat-grid">${scopeCard}${cards}</div>`
     : `<div class="empty-note">No projects are assigned to your account yet.</div>`;
   document.getElementById("content").innerHTML = greetingBar() + `
     <div class="cat-head" style="margin-top:6px">
