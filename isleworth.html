@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loomis Isleworth — Scope · Better Living Systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+  :root{--bg:#060605;--bg2:#121110;--panel:#17150f;--panel2:#1c1a14;--line:#2a2720;
+    --gold:#b99a63;--gold-2:#cbb488;--text:#efe9df;--muted:#9a9388;--green:#8fbf7f;--danger:#c76b5a;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:Lato,Helvetica,Arial,sans-serif}
+  input,textarea,button{font-family:inherit}
+  a{color:var(--gold-2)}
+  .topbar{display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:0;z-index:40;flex-wrap:wrap}
+  .brand .eyebrow{font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .brand h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:24px;margin:1px 0 0;color:var(--gold-2);line-height:1}
+  .back{font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line);border-radius:7px;padding:6px 10px}
+  .back:hover{border-color:var(--gold)}
+  .spacer{margin-left:auto}
+  .save-state{font-size:12px;color:var(--muted);min-width:70px;text-align:right}
+  .save-state.ok{color:var(--green)} .save-state.err{color:var(--danger)} .save-state.saving{color:var(--gold-2)}
+  .role-pill{font-size:10.5px;border:1px solid var(--line);border-radius:999px;padding:2px 9px;color:var(--gold-2)}
+  .tag{display:inline-block;background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 7px;font-size:10.5px;color:var(--gold-2)}
+  .btn{background:var(--gold);color:#1a150c;border:0;border-radius:7px;padding:7px 12px;font-weight:800;font-size:12.5px;cursor:pointer}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:700}
+  .btn.ghost:hover{border-color:var(--gold)}
+  .icon{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 5px;border-radius:5px}
+  .icon:hover{color:var(--gold-2);background:#2a2619}.icon.del:hover{color:var(--danger)}
+  .rooms{display:flex;gap:6px;flex-wrap:wrap;padding:10px 22px;border-bottom:1px solid var(--line);background:var(--bg2)}
+  .room-tab{padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-size:12.5px;cursor:pointer;color:var(--muted);background:transparent;white-space:nowrap}
+  .room-tab:hover{background:var(--panel2)}.room-tab.on{background:#241f15;border-color:var(--gold);color:var(--gold-2);font-weight:700}
+  .page{max-width:1120px;margin:0 auto;padding:22px 22px 70px}
+  .room-title{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+  .room-title h2{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:30px;margin:0}
+  .room-title .hint{font-size:12px;color:var(--muted)}
+  .placing-banner{display:none;align-items:center;gap:10px;background:#2a1f12;border:1px solid var(--gold);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12.5px;color:var(--gold-2)}
+  .placing-banner.on{display:flex}
+  .drawing-box{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#0c0b09}
+  .drawing-box.placing{cursor:crosshair}
+  .drawing-box img{display:block;width:100%;height:auto}.placeholder-plan{display:block;width:100%;height:auto}
+  .url-row{display:flex;gap:8px;margin-top:8px}
+  .hs{position:absolute;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:rgba(185,154,99,.22);border:2px solid var(--gold);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .12s,background .12s;font-size:11px;font-weight:800;color:var(--gold-2)}
+  .hs:hover,.hs.sel{transform:translate(-50%,-50%) scale(1.2);background:rgba(185,154,99,.5)}.hs.sel{box-shadow:0 0 0 3px rgba(185,154,99,.3)}
+  .hs .bubble{position:absolute;bottom:135%;left:50%;transform:translateX(-50%);width:258px;background:var(--panel);border:1px solid var(--gold);border-radius:10px;padding:11px 12px;box-shadow:0 10px 30px rgba(0,0,0,.55);opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none;z-index:20;text-align:left}
+  .hs:hover .bubble{opacity:1;visibility:visible}
+  .bubble .b-title{font-weight:900;font-size:13px;color:var(--gold-2)}.bubble .b-measure{font-size:12px;color:var(--muted);margin:3px 0 7px}
+  .bubble .b-prod{font-size:12px;padding:3px 0;border-top:1px solid var(--line);display:flex;justify-content:space-between;gap:8px}.bubble .b-prod:first-of-type{border-top:0}
+  .bubble .b-qty{color:var(--muted);white-space:nowrap}.bubble .b-arrow{position:absolute;top:100%;left:50%;transform:translateX(-50%);border:7px solid transparent;border-top-color:var(--gold)}
+  .scope-box{border:1px solid var(--line);border-radius:12px;background:var(--bg2);margin-top:16px;overflow:hidden}
+  .scope-head{display:flex;align-items:center;justify-content:space-between;padding:11px 15px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  .scope-head .t{font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold-2);font-weight:800}
+  .scope-head .sum{font-size:12px;color:var(--muted)}
+  .scope-body{padding:15px}
+  .scope-label{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin:0 0 5px}
+  .scope-text{width:100%;min-height:70px;background:#0f0e0b;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:10px 12px;font-size:13.5px;line-height:1.5;resize:vertical;outline:none}
+  .scope-text:focus{border-color:var(--gold)}.scope-text[disabled]{opacity:.8;cursor:default}
+  .callouts-head{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px}
+  .callouts-head .t{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  .item{border:1px solid var(--line);border-radius:10px;background:var(--panel);margin-bottom:10px;overflow:hidden}
+  .item.sel{border-color:var(--gold);box-shadow:0 0 0 1px var(--gold)}.item.unplaced{border-style:dashed;border-color:var(--danger)}
+  .item-h{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--panel2);border-bottom:1px solid var(--line)}
+  .item-h .num{font-size:11px;color:var(--muted);min-width:22px;font-variant-numeric:tabular-nums}
+  .item-h .lbl{flex:1;background:transparent;border:0;color:var(--text);font-weight:800;font-size:13.5px;outline:none}
+  .item-h .lbl::placeholder{color:#5c564a}
+  .item-b{padding:9px 10px;display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .fld label{display:block;font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+  .inp{width:100%;background:#0f0e0b;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:6px 8px;font-size:12.5px;outline:none}
+  .inp:focus{border-color:var(--gold)}.inp[disabled]{opacity:.7}
+  .prods{grid-column:1 / -1}.prod-row{display:flex;gap:6px;margin-bottom:5px}.prod-row .pname{flex:1}.prod-row .pqty{width:78px}
+  .prod-add{font-size:11.5px;color:var(--gold-2);background:transparent;border:1px dashed var(--line);border-radius:6px;padding:5px 8px;cursor:pointer;width:100%}.prod-add:hover{border-color:var(--gold)}
+  .placed-flag{grid-column:1 / -1;font-size:10.5px;color:var(--muted)}.placed-flag.no{color:var(--danger)}
+  .empty{color:var(--muted);font-size:12.5px;padding:14px;text-align:center;border:1px dashed var(--line);border-radius:8px}
+  .gate{max-width:420px;margin:12vh auto;text-align:center;padding:30px}
+  .gate h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;color:var(--gold-2)}
+  @media(max-width:620px){.item-b{grid-template-columns:1fr}}
+</style></head>
+<body>
+<div id="app" style="display:none">
+  <div class="topbar">
+    <a class="back" href="/">← Lookbook</a>
+    <div class="brand"><div class="eyebrow">Better Living Systems · Isleworth Country Club</div><h1 id="projName">Loomis Isleworth — Scope</h1></div>
+    <span class="tag">Projects</span>
+    <div class="spacer"></div>
+    <span class="role-pill" id="rolePill"></span>
+    <span class="save-state" id="saveState"></span>
+  </div>
+  <div class="rooms" id="roomTabs"></div>
+  <div class="page">
+    <div class="room-title"><h2 id="roomName">—</h2>
+      <span class="hint" id="roomHint">Hover a marker for products &amp; measurements</span>
+      <span class="spacer"></span>
+      <button class="icon del" id="delRoom" title="Delete room" style="display:none">✕ room</button>
+    </div>
+    <div class="placing-banner" id="placingBanner"><span id="placingText"></span>
+      <button class="icon" id="placingCancel" style="margin-left:auto;color:var(--gold-2)">cancel</button></div>
+    <div class="drawing-box" id="drawingBox"></div>
+    <div class="url-row" id="urlRow" style="display:none">
+      <input class="inp" id="drawUrl" placeholder="Hosted drawing image URL (e.g. assets/loomis/great-room.jpg)">
+      <button class="btn ghost" id="setUrl">Set drawing</button>
+    </div>
+    <div class="scope-box">
+      <div class="scope-head"><span class="t">Scope &amp; Call-outs — <span id="scopeRoom">—</span></span><span class="sum" id="calloutCount">0 call-outs</span></div>
+      <div class="scope-body">
+        <p class="scope-label">Room scope</p>
+        <textarea class="scope-text" id="scopeText" placeholder="Describe the scope for this room — systems, intent, notes from the proposal / emails…"></textarea>
+        <div class="callouts-head"><span class="t">Call-outs (pinned to the drawing)</span>
+          <button class="btn" id="addCallout">+ Add call-out</button></div>
+        <div id="calloutList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="gate" class="gate" style="display:none">
+  <h1>Loomis Isleworth</h1>
+  <p style="color:var(--muted)">Please sign in on the Lookbook to open this project.</p>
+  <p><a class="btn" href="/" style="text-decoration:none">Go to sign in →</a></p>
+</div>
+
+<script>
+const PID="loomis-isleworth";
+let DATA={project:{name:"Loomis Isleworth"},rooms:[],can_edit:false};
+let curRoom=null, selId=null, placing=null;
+let uid=1; const nid=()=>'c'+Date.now().toString(36)+(uid++);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const room=()=>DATA.rooms.find(r=>r.id===curRoom);
+
+async function api(path,opts={}){
+  const r=await fetch('/api/'+path,{headers:{'content-type':'application/json'},credentials:'include',...opts,body:opts.body?JSON.stringify(opts.body):undefined});
+  const d=await r.json().catch(()=>({})); if(!r.ok) throw new Error(d.error||'Error'); return d;
+}
+
+/* ---- boot: gate on login ---- */
+(async function boot(){
+  let me=null; try{ me=(await api('me')).user; }catch(e){}
+  if(!me){ document.getElementById('gate').style.display='block'; return; }
+  document.getElementById('app').style.display='block';
+  try{ DATA=await api('scope?project='+PID); }catch(e){ document.getElementById('gate').style.display='block'; document.getElementById('app').style.display='none'; return; }
+  document.getElementById('projName').textContent=(DATA.project.name||'Loomis Isleworth')+' — Scope';
+  document.getElementById('rolePill').textContent=DATA.can_edit?('Editing as '+(me.name||'team')):'View only';
+  document.getElementById('addCallout').style.display=DATA.can_edit?'':'none';
+  document.getElementById('urlRow').style.display=DATA.can_edit?'flex':'none';
+  if(!DATA.can_edit){ document.getElementById('scopeText').setAttribute('disabled','');
+    const a=document.createElement('style'); a.textContent='.item-h .lbl,.inp{pointer-events:none}.prod-add,.icon{display:none!important}'; document.head.appendChild(a); }
+  curRoom=DATA.rooms[0]&&DATA.rooms[0].id;
+  renderAll();
+})();
+
+/* ---- autosave (debounced per room) ---- */
+let saveTimer=null, dirty=false;
+function setSave(state,txt){ const el=document.getElementById('saveState'); el.className='save-state '+state; el.textContent=txt; }
+function queueSave(){ if(!DATA.can_edit) return; dirty=true; setSave('saving','Saving…'); clearTimeout(saveTimer); saveTimer=setTimeout(saveRoom,900); }
+async function saveRoom(){
+  const r=room(); if(!r||!DATA.can_edit){return;}
+  try{
+    await api('scope/room',{method:'PUT',body:{id:r.id,name:r.name,drawing_url:r.drawing_url,scope_text:r.scope_text,callouts:r.callouts,sort:r.sort}});
+    dirty=false; setSave('ok','Saved ✓'); setTimeout(()=>{if(!dirty)setSave('','');},1500);
+  }catch(e){ setSave('err','Save failed'); }
+}
+
+function placeholderPlan(label){
+  return `<svg class="placeholder-plan" viewBox="0 0 1120 620" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1120" height="620" fill="#0c0b09"/><rect x="66" y="56" width="988" height="508" fill="none" stroke="#2a2720" stroke-width="2"/>
+    <rect x="66" y="56" width="520" height="270" fill="none" stroke="#242016"/><rect x="586" y="56" width="468" height="270" fill="none" stroke="#242016"/>
+    <rect x="66" y="326" width="988" height="238" fill="none" stroke="#242016"/>
+    <text x="560" y="300" fill="#3d382c" font-family="Lato" font-size="24" text-anchor="middle">Cropped RCP image — ${esc(label)}</text>
+    <text x="560" y="332" fill="#2f2b22" font-family="Lato" font-size="13" text-anchor="middle">${DATA.can_edit?'Set the drawing URL below (hosted RCP crop)':'(drawing not set yet)'}</text></svg>`;
+}
+function renderDrawing(){
+  const r=room(); if(!r) return;
+  document.getElementById('roomName').textContent=r.name;
+  document.getElementById('scopeRoom').textContent=r.name;
+  document.getElementById('delRoom').style.display=DATA.can_edit?'':'none';
+  if(document.getElementById('drawUrl')) document.getElementById('drawUrl').value=r.drawing_url||'';
+  const box=document.getElementById('drawingBox'); box.classList.toggle('placing',!!placing);
+  box.innerHTML=r.drawing_url?`<img src="${esc(r.drawing_url)}" alt="${esc(r.name)}">`:placeholderPlan(r.name);
+  (r.callouts||[]).forEach((it,i)=>{
+    if(it.x==null||it.y==null) return;
+    const el=document.createElement('div'); el.className='hs'+(it.id===selId?' sel':''); el.style.left=it.x+'%'; el.style.top=it.y+'%'; el.textContent=i+1;
+    el.innerHTML+=`<div class="bubble"><div class="b-title">${esc(it.label||'(untitled)')}</div>
+      ${it.measurement?`<div class="b-measure">${esc(it.measurement)}</div>`:''}
+      ${(it.products||[]).filter(p=>p.name).map(p=>`<div class="b-prod"><span>${esc(p.name)}</span><span class="b-qty">${esc(p.qty)}</span></div>`).join('')}
+      <div class="b-arrow"></div></div>`;
+    el.addEventListener('click',e=>{e.stopPropagation();selectItem(it.id);});
+    box.appendChild(el);
+  });
+  box.onclick=e=>{ if(!placing||!DATA.can_edit) return;
+    const rect=box.getBoundingClientRect(); const it=(r.callouts||[]).find(i=>i.id===placing);
+    if(it){ it.x=+(((e.clientX-rect.left)/rect.width)*100).toFixed(1); it.y=+(((e.clientY-rect.top)/rect.height)*100).toFixed(1); }
+    placing=null; updateBanner(); queueSave(); renderCallouts(); renderDrawing(); };
+}
+function updateBanner(){ const b=document.getElementById('placingBanner');
+  if(placing){ const it=(room().callouts||[]).find(i=>i.id===placing);
+    document.getElementById('placingText').textContent='Click the drawing to place: '+(it&&it.label?it.label:'new call-out'); b.classList.add('on'); }
+  else b.classList.remove('on'); }
+
+const scopeEl=document.getElementById('scopeText');
+scopeEl.addEventListener('input',()=>{ if(!DATA.can_edit)return; room().scope_text=scopeEl.value; queueSave(); });
+
+function renderCallouts(){
+  const r=room(); if(!r) return; const list=r.callouts||[];
+  document.getElementById('calloutCount').textContent=list.length+' call-out'+(list.length===1?'':'s');
+  const box=document.getElementById('calloutList');
+  if(!list.length){ box.innerHTML='<div class="empty">No call-outs yet.'+(DATA.can_edit?' Add one, or click the drawing.':'')+'</div>'; return; }
+  box.innerHTML=list.map((it,i)=>`
+    <div class="item ${it.id===selId?'sel':''} ${it.x==null?'unplaced':''}" data-id="${it.id}">
+      <div class="item-h"><span class="num">${String(i+1).padStart(2,'0')}</span>
+        <input class="lbl" data-f="label" placeholder="Call-out (e.g. Drape Pocket)" value="${esc(it.label)}" ${DATA.can_edit?'':'readonly'}>
+        ${DATA.can_edit?`<button class="icon locate" title="${it.x==null?'Place on drawing':'Find'}">${it.x==null?'◎ place':'◎'}</button><button class="icon del" title="Delete">✕</button>`:''}
+      </div>
+      <div class="item-b">
+        <div class="fld"><label>Measurement</label><input class="inp" data-f="measurement" placeholder="e.g. 18' 4&quot; W × 10&quot; D" value="${esc(it.measurement)}" ${DATA.can_edit?'':'readonly'}></div>
+        <div class="fld"><label>Location</label><input class="inp" disabled value="${it.x==null?'not placed':it.x+'% , '+it.y+'%'}"></div>
+        <div class="prods"><label class="scope-label">Products</label>
+          ${(it.products||[]).map((p,pi)=>`<div class="prod-row" data-pi="${pi}">
+             <input class="inp pname" placeholder="Product" value="${esc(p.name)}" ${DATA.can_edit?'':'readonly'}>
+             <input class="inp pqty" placeholder="qty" value="${esc(p.qty)}" ${DATA.can_edit?'':'readonly'}>
+             ${DATA.can_edit?'<button class="icon del pdel" title="Remove">✕</button>':''}</div>`).join('')}
+          ${DATA.can_edit?'<button class="prod-add">+ Add product</button>':''}
+        </div>
+        <div class="placed-flag ${it.x==null?'no':''}">${it.x==null?'⚠ not pinned to the drawing':'pinned to the drawing'}</div>
+      </div>
+    </div>`).join('');
+  if(!DATA.can_edit) return;
+  box.querySelectorAll('.item').forEach(card=>{
+    const id=card.dataset.id, it=list.find(x=>x.id===id);
+    card.querySelector('[data-f="label"]').oninput=e=>{it.label=e.target.value; renderDrawing(); queueSave();};
+    card.querySelector('[data-f="measurement"]').oninput=e=>{it.measurement=e.target.value; renderDrawing(); queueSave();};
+    card.querySelector('.locate').onclick=()=>{ it.x==null?startPlacing(id):selectItem(id); };
+    card.querySelector('.del').onclick=()=>{ if(confirm('Delete this call-out?')){ r.callouts=list.filter(x=>x.id!==id); if(selId===id)selId=null; renderCallouts(); renderDrawing(); renderTabs(); queueSave(); } };
+    card.querySelector('.prod-add').onclick=()=>{ it.products=it.products||[]; it.products.push({name:'',qty:''}); renderCallouts(); renderDrawing(); queueSave(); };
+    card.querySelectorAll('.prod-row').forEach(rw=>{ const pi=+rw.dataset.pi;
+      rw.querySelector('.pname').oninput=e=>{it.products[pi].name=e.target.value; renderDrawing(); queueSave();};
+      rw.querySelector('.pqty').oninput=e=>{it.products[pi].qty=e.target.value; renderDrawing(); queueSave();};
+      rw.querySelector('.pdel').onclick=()=>{ it.products.splice(pi,1); renderCallouts(); renderDrawing(); queueSave(); };
+    });
+    card.querySelector('.item-h').addEventListener('click',e=>{ if(e.target.closest('button')||e.target.closest('input'))return; selectItem(id); });
+  });
+}
+function selectItem(id){ selId=id; renderCallouts(); renderDrawing();
+  const c=document.querySelector('.item[data-id="'+id+'"]'); if(c)c.scrollIntoView({block:'nearest',behavior:'smooth'}); }
+function startPlacing(id){ placing=id; selId=id; updateBanner(); renderCallouts(); renderDrawing(); document.getElementById('drawingBox').scrollIntoView({block:'start',behavior:'smooth'}); }
+
+function renderTabs(){
+  document.getElementById('roomTabs').innerHTML=DATA.rooms.map(r=>
+    `<button class="room-tab ${r.id===curRoom?'on':''}" data-id="${r.id}">${esc(r.name)} <span style="opacity:.6">· ${(r.callouts||[]).length}</span></button>`).join('')
+    + (DATA.can_edit?'<button class="room-tab" id="addRoomTab" style="border-style:dashed">+ Room</button>':'');
+  document.querySelectorAll('.room-tab[data-id]').forEach(t=>t.onclick=()=>{ if(dirty)saveRoom(); curRoom=t.dataset.id; selId=null; placing=null; updateBanner(); renderAll(); window.scrollTo({top:0,behavior:'smooth'}); });
+  const add=document.getElementById('addRoomTab'); if(add) add.onclick=addRoom;
+}
+async function addRoom(){
+  const name=prompt('New room name:'); if(!name) return;
+  try{ const r=await api('scope/room',{method:'POST',body:{project:PID,name:name.trim()}});
+    DATA=await api('scope?project='+PID); curRoom=r.id; renderAll(); }catch(e){ alert(e.message); }
+}
+document.getElementById('delRoom').onclick=async()=>{ const r=room(); if(!r)return;
+  if(!confirm('Delete the room "'+r.name+'" and its call-outs?')) return;
+  try{ await api('scope/room?id='+encodeURIComponent(r.id),{method:'DELETE'}); DATA=await api('scope?project='+PID); curRoom=DATA.rooms[0]&&DATA.rooms[0].id; renderAll(); }catch(e){ alert(e.message); } };
+document.getElementById('addCallout').onclick=()=>{ const r=room(); r.callouts=r.callouts||[];
+  const it={id:nid(),label:'',measurement:'',products:[{name:'',qty:''}],x:null,y:null};
+  r.callouts.push(it); selId=it.id; renderCallouts(); renderTabs();
+  const c=document.querySelector('.item[data-id="'+it.id+'"]'); if(c)c.querySelector('.lbl').focus();
+  startPlacing(it.id); queueSave(); };
+document.getElementById('placingCancel').onclick=()=>{ placing=null; updateBanner(); renderDrawing(); };
+if(document.getElementById('setUrl')) document.getElementById('setUrl').onclick=()=>{ const r=room(); r.drawing_url=document.getElementById('drawUrl').value.trim()||null; renderDrawing(); queueSave(); };
+
+function renderAll(){ renderTabs(); const r=room(); scopeEl.value=r?r.scope_text||'':''; renderCallouts(); renderDrawing(); updateBanner(); }
+window.addEventListener('beforeunload',()=>{ if(dirty){ try{ navigator.sendBeacon; }catch(e){} } });
+</script>
+</body></html>
