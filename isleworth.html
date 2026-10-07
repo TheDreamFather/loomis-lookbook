@@ -6,6 +6,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Instrument+Serif:ital@0;1&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{--bg:#060605;--bg2:#121110;--panel:#17150f;--panel2:#1c1a14;--line:#2a2720;
     --gold:#b99a63;--gold-2:#cbb488;--text:#efe9df;--muted:#9a9388;--green:#8fbf7f;--danger:#c76b5a;}
@@ -98,6 +99,20 @@
   .chip-EDITED{background:#3a1f26;color:#e69aa8;border-color:#5a2d38}
   .li-srcsel{font-size:10px}
   .li-del{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:13px}.li-del:hover{color:var(--danger)}
+  /* ---- PDF plan drop zone ---- */
+  .plandrop{border-bottom:1px solid var(--line);background:#0e0d0b;padding:14px 22px}
+  .pd-zone{border:1.5px dashed var(--line);border-radius:12px;padding:20px;text-align:center;color:var(--muted);cursor:pointer;font-size:13.5px;transition:border-color .12s,background .12s}
+  .pd-zone:hover,.pd-zone.drag{border-color:var(--gold);background:#17150f;color:var(--gold-2)}
+  .pd-pages{display:flex;flex-wrap:wrap;gap:12px;margin-top:12px}
+  .pd-card{border:1px solid var(--line);border-radius:10px;background:var(--panel);padding:8px;width:220px}
+  .pd-card img{width:100%;height:130px;object-fit:cover;border-radius:6px;background:#0c0b09;border:1px solid var(--line)}
+  .pd-card .pd-lbl{width:100%;margin-top:6px;background:#0f0e0b;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:5px 7px;font-size:12px;outline:none}
+  .pd-card .pd-row{display:flex;gap:5px;margin-top:6px;flex-wrap:wrap}
+  .pd-card .pd-row .btn{padding:5px 8px;font-size:11px}
+  .pd-assign{margin-top:6px}
+  .pd-assign select{width:100%;background:#0f0e0b;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:5px;font-size:11.5px}
+  .pd-scrape{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5}
+  .pd-matchchip{display:inline-block;background:#122f1c;color:#8fbf7f;border:1px solid #1e4a2e;border-radius:5px;padding:1px 6px;font-size:10.5px;margin:2px}
 </style></head>
 <body>
 <div id="app" style="display:none">
@@ -108,6 +123,13 @@
     <div class="spacer"></div>
     <span class="role-pill" id="rolePill"></span>
     <span class="save-state" id="saveState"></span>
+  </div>
+  <div class="plandrop" id="planDrop" style="display:none">
+    <div class="pd-zone" id="pdZone">⬆ Drop a plan / RCP PDF here <span style="opacity:.7">(or click to choose)</span> — pages render to images, room labels are scraped, and pages can be assigned as room drawings</div>
+    <input type="file" id="pdFile" accept="application/pdf" style="display:none">
+    <div id="pdStatus" class="muted" style="margin-top:8px;font-size:12.5px"></div>
+    <div id="pdScrape" class="pd-scrape"></div>
+    <div id="pdPages" class="pd-pages"></div>
   </div>
   <div class="rooms" id="floorTabs" style="padding-bottom:4px;border-bottom:0"></div>
   <div class="rooms" id="roomTabs" style="padding-top:6px"></div>
@@ -178,6 +200,7 @@ async function api(path,opts={}){
   document.getElementById('rolePill').textContent=DATA.can_edit?('Editing as '+(me.name||'team')):'View only';
   document.getElementById('addCallout').style.display=DATA.can_edit?'':'none';
   document.getElementById('urlRow').style.display=DATA.can_edit?'flex':'none';
+  { const pd=document.getElementById('planDrop'); if(pd) pd.style.display=DATA.can_edit?'block':'none'; }
   if(!DATA.can_edit){ document.getElementById('scopeText').setAttribute('disabled','');
     const a=document.createElement('style'); a.textContent='.item-h .lbl,.inp{pointer-events:none}.prod-add,.icon{display:none!important}'; document.head.appendChild(a); }
   curRoom=DATA.rooms[0]&&DATA.rooms[0].id;
@@ -388,5 +411,104 @@ function renderStats(){
 
 function renderAll(){ renderTabs(); const r=room(); scopeEl.value=r?r.scope_text||'':''; renderLineItems(); renderStats(); renderCallouts(); renderDrawing(); updateBanner(); }
 window.addEventListener('beforeunload',()=>{ if(dirty){ try{ navigator.sendBeacon; }catch(e){} } });
+
+/* ================= PDF plan drop zone: render + scrape + assign ================= */
+(function planDropInit(){
+  try { if(window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch(e){}
+  const zone=document.getElementById('pdZone'), fileInput=document.getElementById('pdFile');
+  if(!zone) return;
+  zone.addEventListener('click',()=>fileInput.click());
+  fileInput.addEventListener('change',e=>{ const f=e.target.files&&e.target.files[0]; if(f) handlePdf(f); });
+  ['dragenter','dragover'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>zone.addEventListener(ev,e=>{e.preventDefault();zone.classList.remove('drag');}));
+  zone.addEventListener('drop',e=>{ const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) handlePdf(f); });
+})();
+// Render a page to a downscaled JPEG data URL under ~0.9MB (D1 BLOB limit headroom).
+async function renderPageToJpeg(page){
+  for(const [maxW,q] of [[1600,0.62],[1300,0.6],[1050,0.55],[850,0.5]]){
+    const vp1=page.getViewport({scale:1});
+    const scale=Math.min(2, maxW/vp1.width);
+    const vp=page.getViewport({scale});
+    const canvas=document.createElement('canvas'); canvas.width=Math.ceil(vp.width); canvas.height=Math.ceil(vp.height);
+    const ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    await page.render({canvasContext:ctx, viewport:vp}).promise;
+    const url=canvas.toDataURL('image/jpeg',q);
+    if(url.length < 1250000) return url; // base64 len ~ bytes*1.33; keep decoded under ~0.9MB
+  }
+  // last resort: tiny
+  const vp=page.getViewport({scale:0.6}); const c=document.createElement('canvas'); c.width=Math.ceil(vp.width); c.height=Math.ceil(vp.height);
+  const cx=c.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,c.width,c.height); await page.render({canvasContext:cx,viewport:vp}).promise;
+  return c.toDataURL('image/jpeg',0.45);
+}
+async function handlePdf(file){
+  const status=document.getElementById('pdStatus'), pagesEl=document.getElementById('pdPages'), scrapeEl=document.getElementById('pdScrape');
+  pagesEl.innerHTML=''; scrapeEl.innerHTML=''; status.textContent='Reading '+file.name+'…';
+  if(!window.pdfjsLib){ status.textContent='PDF engine failed to load — check connection and retry.'; return; }
+  let pdf;
+  try{ const buf=await file.arrayBuffer(); pdf=await pdfjsLib.getDocument({data:buf}).promise; }
+  catch(e){ status.textContent='Could not read that PDF.'; return; }
+  const nPages=Math.min(pdf.numPages, 16);
+  status.textContent=`Rendering ${nPages} page${nPages===1?'':'s'} of ${file.name}…`;
+  let allText='';
+  for(let i=1;i<=nPages;i++){
+    const page=await pdf.getPage(i);
+    let url; try{ url=await renderPageToJpeg(page); }catch(e){ continue; }
+    try{ const tc=await page.getTextContent(); allText+=' '+tc.items.map(it=>it.str).join(' '); }catch(e){}
+    addPageCard(i, url, file.name);
+    status.textContent=`Rendered ${i} / ${nPages}…`;
+  }
+  status.textContent=`${nPages} page${nPages===1?'':'s'} rendered. Save the ones you want, then assign to rooms.`;
+  scrapeRooms(allText, scrapeEl);
+}
+function addPageCard(pageNo, dataUrl, fileName){
+  const wrap=document.getElementById('pdPages');
+  const card=document.createElement('div'); card.className='pd-card';
+  card.innerHTML=`<img src="${dataUrl}" alt="page ${pageNo}">
+    <input class="pd-lbl" value="${esc(fileName.replace(/\\.pdf$/i,''))} — p${pageNo}">
+    <div class="pd-row"><button class="btn pd-save">Save page</button><span class="muted pd-saved" style="font-size:11px"></span></div>
+    <div class="pd-assign" style="display:none">
+      <select class="pd-target">
+        <option value="">Assign to…</option>
+        <option value="floor:Main">All Main-floor rooms</option>
+        <option value="floor:Upper">All Upper-floor rooms</option>
+        <option value="floor:Exterior">All Exterior rooms</option>
+        <option value="room">Just the current room (${esc((room()||{}).name||'—')})</option>
+        <option value="all">Every room</option>
+      </select>
+    </div>`;
+  wrap.appendChild(card);
+  let savedUrl=null;
+  const saveBtn=card.querySelector('.pd-save'), savedEl=card.querySelector('.pd-saved');
+  saveBtn.onclick=async()=>{
+    saveBtn.disabled=true; savedEl.textContent='Saving…';
+    try{
+      const r=await api('scope/plan',{method:'POST',body:{project:PID,label:card.querySelector('.pd-lbl').value,page_no:pageNo,data_url:dataUrl}});
+      savedUrl=r.url; savedEl.textContent='Saved ✓'; card.querySelector('.pd-assign').style.display='block'; saveBtn.textContent='Saved';
+    }catch(e){ savedEl.textContent=e.message; saveBtn.disabled=false; }
+  };
+  card.querySelector('.pd-target').onchange=async(e)=>{
+    const v=e.target.value; if(!v||!savedUrl){ e.target.value=''; return; }
+    const body={project:PID, drawing_url:savedUrl};
+    if(v.startsWith('floor:')) body.floor=v.slice(6);
+    else if(v==='all') body.all=true;
+    else if(v==='room'){ const r=room(); if(r) body.room_ids=[r.id]; }
+    try{
+      const res=await api('scope/assign-drawing',{method:'POST',body});
+      savedEl.textContent=`Assigned to ${res.assigned} room(s) ✓`;
+      DATA=await api('scope?project='+PID); renderAll();
+    }catch(err){ savedEl.textContent=err.message; }
+    e.target.value='';
+  };
+}
+// Scrape the PDF text for room-name matches against this project's rooms.
+function scrapeRooms(text, el){
+  const norm=s=>String(s||'').toLowerCase().replace(/&/g,'and').replace(/[^a-z0-9]+/g,' ').trim();
+  const hay=' '+norm(text)+' ';
+  const matched=(DATA.rooms||[]).filter(r=>{ const n=norm(r.name); return n && hay.includes(' '+n+' '); });
+  const names=matched.map(r=>`<span class="pd-matchchip">${esc(r.name)}</span>`).join('');
+  el.innerHTML = matched.length
+    ? `Scraped the plan text and matched <b>${matched.length}</b> of ${(DATA.rooms||[]).length} existing rooms:<br>${names}`
+    : 'No room-name matches found in the PDF text layer (the sheet may be a flattened scan with no selectable text — rooms can still use the rendered page image; assign manually).';
+}
 </script>
 </body></html>
