@@ -75,19 +75,43 @@
   .gate{max-width:420px;margin:12vh auto;text-align:center;padding:30px}
   .gate h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;color:var(--gold-2)}
   @media(max-width:620px){.item-b{grid-template-columns:1fr}}
+  /* ---- summary stat bar ---- */
+  .statbar{display:flex;flex-wrap:wrap;gap:8px;padding:12px 22px;border-bottom:1px solid var(--line);background:#0e0d0b}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:7px 12px;min-width:92px}
+  .stat .sv{font-weight:900;font-size:18px;color:var(--gold-2);line-height:1}
+  .stat .sk{font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-top:3px}
+  /* ---- line-item table ---- */
+  .li-head{display:flex;align-items:center;justify-content:space-between;margin:18px 0 8px}
+  .li-head .t{font-size:10.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}
+  table.li{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.li th{text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:1px solid var(--line);padding:5px 6px}
+  table.li td{border-bottom:1px solid var(--line);padding:4px 6px;vertical-align:middle}
+  table.li .liq{width:60px}.li-unit{width:52px}
+  table.li select,table.li input{background:#0f0e0b;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:5px 6px;font-size:12.5px;width:100%;outline:none}
+  table.li select:focus,table.li input:focus{border-color:var(--gold)}
+  .chip{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.5px;border-radius:5px;padding:2px 7px;border:1px solid transparent;cursor:pointer}
+  .chip-RCP{background:#13303a;color:#8fd3e6;border-color:#1d4a59}
+  .chip-EST{background:#122f1c;color:#8fbf7f;border-color:#1e4a2e}
+  .chip-DFO{background:#2e2340;color:#c0a6e8;border-color:#44335f}
+  .chip-PH1{background:#3a2f12;color:#e6c879;border-color:#5a4a1d}
+  .chip-ADDED{background:#2a1f12;color:#e6b879;border-color:#5a3f1d}
+  .chip-EDITED{background:#3a1f26;color:#e69aa8;border-color:#5a2d38}
+  .li-srcsel{font-size:10px}
+  .li-del{background:transparent;border:0;color:var(--muted);cursor:pointer;font-size:13px}.li-del:hover{color:var(--danger)}
 </style></head>
 <body>
 <div id="app" style="display:none">
   <div class="topbar">
     <a class="back" href="/">← Lookbook</a>
     <div class="brand"><div class="eyebrow">Better Living Systems · Isleworth Country Club</div><h1 id="projName">Loomis Isleworth — Scope</h1></div>
-    <span class="tag">Projects</span>
+    <select id="scopeSwitch" title="Switch scope project" style="background:#0f0e0b;border:1px solid var(--line);color:var(--gold-2);border-radius:7px;padding:6px 8px;font-size:12px"></select>
     <div class="spacer"></div>
     <span class="role-pill" id="rolePill"></span>
     <span class="save-state" id="saveState"></span>
   </div>
   <div class="rooms" id="floorTabs" style="padding-bottom:4px;border-bottom:0"></div>
   <div class="rooms" id="roomTabs" style="padding-top:6px"></div>
+  <div class="statbar" id="statBar"></div>
   <div class="page">
     <div class="room-title"><h2 id="roomName">—</h2>
       <span class="hint" id="roomHint">Hover a marker for products &amp; measurements</span>
@@ -106,6 +130,11 @@
       <div class="scope-body">
         <p class="scope-label">Room scope</p>
         <textarea class="scope-text" id="scopeText" placeholder="Describe the scope for this room — systems, intent, notes from the proposal / emails…"></textarea>
+
+        <div class="li-head"><span class="t">Lighting line items</span>
+          <button class="btn" id="addLine">+ Add light to this room</button></div>
+        <div id="lineItemsWrap"></div>
+
         <div class="callouts-head"><span class="t">Call-outs (pinned to the drawing)</span>
           <button class="btn" id="addCallout">+ Add call-out</button></div>
         <div id="calloutList"></div>
@@ -120,7 +149,13 @@
 </div>
 
 <script>
-const PID="loomis-isleworth";
+const _q=new URLSearchParams(location.search);
+const PID=(_q.get("project")||"loomis-isleworth").trim();
+const PNAME_HINT=_q.get("name")||"";
+// Line-item vocab (matches the Loomis Lighting Scope artifact).
+const LI_CATEGORIES=["Recessed","Accent/adjustable","Cove/coffer","Decorative (by others)","Window treatment","Drape pocket (G2)","Keypad","Other"];
+const LI_UNITS=["ea","LF"];
+const LI_SOURCES=["RCP","EST","DFO","PH1","ADDED","EDITED"];
 let DATA={project:{name:"Loomis Isleworth"},rooms:[],can_edit:false};
 let curRoom=null, selId=null, placing=null, curFloor='All';
 const FLOOR_ORDER=['Main','Upper','Exterior'];
@@ -147,7 +182,24 @@ async function api(path,opts={}){
     const a=document.createElement('style'); a.textContent='.item-h .lbl,.inp{pointer-events:none}.prod-add,.icon{display:none!important}'; document.head.appendChild(a); }
   curRoom=DATA.rooms[0]&&DATA.rooms[0].id;
   renderAll();
+  populateScopeSwitch();
 })();
+
+// Part B: scope-project switcher — list all scope projects, switch via ?project=, or create.
+async function populateScopeSwitch(){
+  const sel=document.getElementById('scopeSwitch'); if(!sel) return;
+  let list=[]; try{ list=(await api('scope/projects')).projects||[]; }catch(e){}
+  if(!list.find(p=>p.id===PID)) list.unshift({id:PID,name:(DATA.project&&DATA.project.name)||PID});
+  sel.innerHTML=list.map(p=>`<option value="${esc(p.id)}" ${p.id===PID?'selected':''}>${esc(p.name)}</option>`).join('')
+    + (DATA.can_edit?'<option value="__new__">+ New scope project…</option>':'');
+  sel.onchange=async()=>{
+    if(sel.value==='__new__'){
+      const name=prompt('New scope project name:'); if(!name){ sel.value=PID; return; }
+      try{ const r=await api('scope/project',{method:'POST',body:{name:name.trim()}}); location.href='/isleworth.html?project='+encodeURIComponent(r.id); }
+      catch(e){ alert(e.message); sel.value=PID; }
+    } else if(sel.value!==PID){ location.href='/isleworth.html?project='+encodeURIComponent(sel.value); }
+  };
+}
 
 /* ---- autosave (debounced per room) ---- */
 let saveTimer=null, dirty=false;
@@ -156,7 +208,7 @@ function queueSave(){ if(!DATA.can_edit) return; dirty=true; setSave('saving','S
 async function saveRoom(){
   const r=room(); if(!r||!DATA.can_edit){return;}
   try{
-    await api('scope/room',{method:'PUT',body:{id:r.id,name:r.name,drawing_url:r.drawing_url,scope_text:r.scope_text,callouts:r.callouts,sort:r.sort}});
+    await api('scope/room',{method:'PUT',body:{id:r.id,name:r.name,floor:r.floor,drawing_url:r.drawing_url,scope_text:r.scope_text,callouts:r.callouts,line_items:r.line_items||[],sort:r.sort}});
     dirty=false; setSave('ok','Saved ✓'); setTimeout(()=>{if(!dirty)setSave('','');},1500);
   }catch(e){ setSave('err','Save failed'); }
 }
@@ -282,7 +334,59 @@ document.getElementById('addCallout').onclick=()=>{ const r=room(); r.callouts=r
 document.getElementById('placingCancel').onclick=()=>{ placing=null; updateBanner(); renderDrawing(); };
 if(document.getElementById('setUrl')) document.getElementById('setUrl').onclick=()=>{ const r=room(); r.drawing_url=document.getElementById('drawUrl').value.trim()||null; renderDrawing(); queueSave(); };
 
-function renderAll(){ renderTabs(); const r=room(); scopeEl.value=r?r.scope_text||'':''; renderCallouts(); renderDrawing(); updateBanner(); }
+/* ---- line items (per room) ---- */
+function nidLine(){ return 'li'+Date.now().toString(36)+Math.floor(Math.random()*1000); }
+function renderLineItems(){
+  const r=room(); if(!r) return; r.line_items=r.line_items||[];
+  const wrap=document.getElementById('lineItemsWrap');
+  const rows=r.line_items.map((li,i)=>`<tr data-i="${i}">
+     <td><select data-f="category">${LI_CATEGORIES.map(c=>`<option ${c===li.category?'selected':''}>${esc(c)}</option>`).join('')}${LI_CATEGORIES.includes(li.category)?'':`<option selected>${esc(li.category||'')}</option>`}</select></td>
+     <td><input data-f="item" value="${esc(li.item)}" placeholder="e.g. Ketra D2 downlight"></td>
+     <td class="liq"><input data-f="qty" type="number" min="0" step="1" value="${li.qty!=null?esc(li.qty):''}"></td>
+     <td class="li-unit"><select data-f="unit">${LI_UNITS.map(u=>`<option ${u===(li.unit||'ea')?'selected':''}>${u}</option>`).join('')}</select></td>
+     <td><select class="li-srcsel" data-f="source">${LI_SOURCES.map(sc=>`<option ${sc===(li.source||'ADDED')?'selected':''}>${sc}</option>`).join('')}</select>
+         <span class="chip chip-${esc(li.source||'ADDED')}" style="margin-left:4px">${esc(li.source||'ADDED')}</span></td>
+     <td style="text-align:right">${DATA.can_edit?`<button class="li-del" title="Remove">✕</button>`:''}</td>
+   </tr>`).join('');
+  wrap.innerHTML = r.line_items.length
+    ? `<table class="li"><thead><tr><th style="width:20%">Category</th><th>Item</th><th class="liq">Qty</th><th class="li-unit">Unit</th><th style="width:150px">Source</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    : '<div class="empty">No lights listed yet.'+(DATA.can_edit?' Add one, or auto-fill from the RCP.':'')+'</div>';
+  document.getElementById('addLine').style.display=DATA.can_edit?'':'none';
+  if(!DATA.can_edit){ wrap.querySelectorAll('select,input').forEach(el=>el.setAttribute('disabled','')); return; }
+  wrap.querySelectorAll('tr[data-i]').forEach(tr=>{
+    const i=+tr.dataset.i, li=r.line_items[i];
+    const touch=(markEdited)=>{ if(markEdited && li._seed){ li.source='EDITED'; delete li._seed; } renderStats(); queueSave(); };
+    tr.querySelector('[data-f="category"]').onchange=e=>{ li.category=e.target.value; touch(true); };
+    tr.querySelector('[data-f="item"]').oninput=e=>{ li.item=e.target.value; touch(true); };
+    tr.querySelector('[data-f="qty"]').oninput=e=>{ li.qty=e.target.value===''?null:Number(e.target.value); touch(true); renderLineItemsStatsOnly(); };
+    tr.querySelector('[data-f="unit"]').onchange=e=>{ li.unit=e.target.value; touch(true); };
+    tr.querySelector('[data-f="source"]').onchange=e=>{ li.source=e.target.value; delete li._seed; renderLineItems(); renderStats(); queueSave(); };
+    const del=tr.querySelector('.li-del'); if(del) del.onclick=()=>{ r.line_items.splice(i,1); renderLineItems(); renderStats(); queueSave(); };
+  });
+}
+function renderLineItemsStatsOnly(){ renderStats(); } // qty typing updates stats without re-render (keeps focus)
+document.getElementById('addLine').onclick=()=>{ const r=room(); r.line_items=r.line_items||[];
+  r.line_items.push({id:nidLine(),category:'Recessed',item:'',qty:null,unit:'ea',source:'ADDED',note:''});
+  renderLineItems(); renderStats(); queueSave(); };
+
+/* ---- project-wide summary stats (derived from all rooms' line items) ---- */
+function sumQty(pred){ let n=0; (DATA.rooms||[]).forEach(r=>(r.line_items||[]).forEach(li=>{ if(pred(li)) n+=Number(li.qty)||0; })); return n; }
+function countRows(pred){ let n=0; (DATA.rooms||[]).forEach(r=>(r.line_items||[]).forEach(li=>{ if(pred(li)) n++; })); return n; }
+function renderStats(){
+  const spaces=(DATA.rooms||[]).length;
+  const recessed=sumQty(li=>li.category==='Recessed');
+  const cove=sumQty(li=>li.category==='Cove/coffer' && (li.unit||'ea')==='LF');
+  const cabinetry=sumQty(li=>/cabinet|toe.?kick|under.?cab/i.test(li.item||'') && (li.unit||'ea')==='LF');
+  const g2=sumQty(li=>li.category==='Drape pocket (G2)' || /\bG2\b/.test(li.item||''));
+  const keypads=sumQty(li=>li.category==='Keypad');
+  const added=countRows(li=>li.source==='ADDED');
+  const edited=countRows(li=>li.source==='EDITED');
+  const S=(v,k)=>`<div class="stat"><div class="sv">${v.toLocaleString()}</div><div class="sk">${k}</div></div>`;
+  document.getElementById('statBar').innerHTML =
+    S(spaces,'spaces')+S(recessed,'recessed')+S(cove,'LF cove')+S(cabinetry,'LF cabinetry')+S(g2,'G2')+S(keypads,'keypads')+S(added,'added')+S(edited,'edited');
+}
+
+function renderAll(){ renderTabs(); const r=room(); scopeEl.value=r?r.scope_text||'':''; renderLineItems(); renderStats(); renderCallouts(); renderDrawing(); updateBanner(); }
 window.addEventListener('beforeunload',()=>{ if(dirty){ try{ navigator.sendBeacon; }catch(e){} } });
 </script>
 </body></html>
