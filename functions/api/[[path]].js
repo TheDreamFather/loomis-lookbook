@@ -174,30 +174,50 @@ async function ensureProjectsTable(env){
 // free-text scope + an array of pinned call-outs {label,measurement,products,x,y}.
 // Call-outs are stored as a JSON blob on the room row (whole-room save keeps the
 // collaborative read/write simple: GET the project, PUT a room).
+// The real Loomis Isleworth room list, grouped by floor (Main / Upper / Exterior).
+const LOOMIS_FLOORS = [
+  { floor: "Main", rooms: ["Entry & Vestibule","Foyer","Dining Room","Living Room","West Gallery","East Gallery","Kitchen","Breakfast","Family Room","Pantry","Tasting Room","Wine Room","Powder Room","Mud Room","Laundry","Chat Room","Bedroom 2","Bath 2","Master Bedroom","Master Bath","Master Water Closet","Her Closet","His Closet","Dressing","His Sauna","Fitness Room","Garage & Garage Bath","Elevator"] },
+  { floor: "Upper", rooms: ["Bridge","Loft","Recreation Room","Snack Bar","Rec Powder Room","Theater","VIP Suite","VIP Bath & Closet","Bedroom 4","Bath 4 & Closet","Bedroom 5","Bath 5 & Closet","East Hall","Upstairs Laundry","Storage / Equipment 1 & 2"] },
+  { floor: "Exterior", rooms: ["Front Entry","Screened Porch","Outdoor Living & Pool Deck","Pool Bath","Covered Terraces & Terrace (Upper)","Zen Garden & Service Yard"] },
+];
+function slugify(s){ return String(s).toLowerCase().replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-+|-+$/g,""); }
 async function ensureScopeTables(env){
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_projects (
     id TEXT PRIMARY KEY, name TEXT, created_at TEXT, updated_at TEXT
   )`).run();
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_rooms (
-    id TEXT PRIMARY KEY, project_id TEXT, name TEXT, drawing_url TEXT,
+    id TEXT PRIMARY KEY, project_id TEXT, name TEXT, floor TEXT, drawing_url TEXT,
     scope_text TEXT, callouts TEXT, sort INTEGER DEFAULT 0,
     updated_at TEXT, updated_by TEXT
   )`).run();
-  // Seed the Loomis Isleworth project + its starter rooms once.
-  const seeded = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
-  if (!seeded) {
-    const now = new Date().toISOString();
+  // Add the floor column on pre-existing DBs (ignore if it already exists).
+  try { await env.DB.prepare("ALTER TABLE scope_rooms ADD COLUMN floor TEXT").run(); } catch(e){}
+  // Small key/value table for one-time scope migrations.
+  await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_meta (key TEXT PRIMARY KEY, value TEXT)`).run();
+  const now = new Date().toISOString();
+  // Ensure the project row exists.
+  const proj = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
+  if (!proj) {
     await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)")
       .bind("loomis-isleworth","Loomis Isleworth",now,now).run();
-    const rooms = ["Great Room","Primary Bedroom","Theater","Kitchen","Covered Patio"];
-    for (let i=0;i<rooms.length;i++){
-      await env.DB.prepare("INSERT INTO scope_rooms (id,project_id,name,drawing_url,scope_text,callouts,sort,updated_at) VALUES (?,?,?,?,?,?,?,?)")
-        .bind("room-"+Date.now()+"-"+i,"loomis-isleworth",rooms[i],null,"","[]",i,now).run();
+  }
+  // One-time seed of the real 49-room list (replaces the earlier placeholder rooms).
+  const flag = await env.DB.prepare("SELECT value FROM scope_meta WHERE key=?").bind("isleworth_rooms_v2").first();
+  if (!flag) {
+    await env.DB.prepare("DELETE FROM scope_rooms WHERE project_id=?").bind("loomis-isleworth").run();
+    let sort = 0;
+    for (const grp of LOOMIS_FLOORS) {
+      for (const name of grp.rooms) {
+        const id = "room-" + slugify(grp.floor) + "-" + slugify(name);
+        await env.DB.prepare("INSERT INTO scope_rooms (id,project_id,name,floor,drawing_url,scope_text,callouts,sort,updated_at) VALUES (?,?,?,?,?,?,?,?,?)")
+          .bind(id, "loomis-isleworth", name, grp.floor, null, "", "[]", sort++, now).run();
+      }
     }
+    await env.DB.prepare("INSERT INTO scope_meta (key,value) VALUES (?,?)").bind("isleworth_rooms_v2", now).run();
   }
 }
 function rowToScopeRoom(r){
-  return { id:r.id, project_id:r.project_id, name:r.name, drawing_url:r.drawing_url||null,
+  return { id:r.id, project_id:r.project_id, name:r.name, floor:r.floor||null, drawing_url:r.drawing_url||null,
     scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), sort:r.sort||0,
     updated_at:r.updated_at, updated_by:r.updated_by||null };
 }
