@@ -86,7 +86,8 @@
     <span class="role-pill" id="rolePill"></span>
     <span class="save-state" id="saveState"></span>
   </div>
-  <div class="rooms" id="roomTabs"></div>
+  <div class="rooms" id="floorTabs" style="padding-bottom:4px;border-bottom:0"></div>
+  <div class="rooms" id="roomTabs" style="padding-top:6px"></div>
   <div class="page">
     <div class="room-title"><h2 id="roomName">—</h2>
       <span class="hint" id="roomHint">Hover a marker for products &amp; measurements</span>
@@ -121,7 +122,8 @@
 <script>
 const PID="loomis-isleworth";
 let DATA={project:{name:"Loomis Isleworth"},rooms:[],can_edit:false};
-let curRoom=null, selId=null, placing=null;
+let curRoom=null, selId=null, placing=null, curFloor='All';
+const FLOOR_ORDER=['Main','Upper','Exterior'];
 let uid=1; const nid=()=>'c'+Date.now().toString(36)+(uid++);
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const room=()=>DATA.rooms.find(r=>r.id===curRoom);
@@ -242,16 +244,31 @@ function selectItem(id){ selId=id; renderCallouts(); renderDrawing();
   const c=document.querySelector('.item[data-id="'+id+'"]'); if(c)c.scrollIntoView({block:'nearest',behavior:'smooth'}); }
 function startPlacing(id){ placing=id; selId=id; updateBanner(); renderCallouts(); renderDrawing(); document.getElementById('drawingBox').scrollIntoView({block:'start',behavior:'smooth'}); }
 
+function floorsPresent(){
+  const set=new Set(DATA.rooms.map(r=>r.floor).filter(Boolean));
+  return FLOOR_ORDER.filter(f=>set.has(f));
+}
 function renderTabs(){
-  document.getElementById('roomTabs').innerHTML=DATA.rooms.map(r=>
-    `<button class="room-tab ${r.id===curRoom?'on':''}" data-id="${r.id}">${esc(r.name)} <span style="opacity:.6">· ${(r.callouts||[]).length}</span></button>`).join('')
+  // Floor filter row (All + each floor present).
+  const floors=floorsPresent();
+  const ftabs=['All',...floors].map(f=>{
+    const n = f==='All' ? DATA.rooms.length : DATA.rooms.filter(r=>r.floor===f).length;
+    return `<button class="room-tab ${curFloor===f?'on':''}" data-floor="${f}" style="font-weight:800;text-transform:uppercase;letter-spacing:.5px;font-size:11.5px">${esc(f)} <span style="opacity:.6">· ${n}</span></button>`;
+  }).join('');
+  document.getElementById('floorTabs').innerHTML = floors.length ? ftabs : '';
+  document.querySelectorAll('#floorTabs .room-tab').forEach(t=>t.onclick=()=>{ curFloor=t.dataset.floor; renderTabs(); });
+  // Room tabs for the selected floor.
+  const list = curFloor==='All' ? DATA.rooms : DATA.rooms.filter(r=>r.floor===curFloor);
+  document.getElementById('roomTabs').innerHTML = list.map(r=>
+    `<button class="room-tab ${r.id===curRoom?'on':''}" data-id="${r.id}">${esc(r.name)}${(r.callouts||[]).length?` <span style="opacity:.6">· ${(r.callouts||[]).length}</span>`:''}</button>`).join('')
     + (DATA.can_edit?'<button class="room-tab" id="addRoomTab" style="border-style:dashed">+ Room</button>':'');
-  document.querySelectorAll('.room-tab[data-id]').forEach(t=>t.onclick=()=>{ if(dirty)saveRoom(); curRoom=t.dataset.id; selId=null; placing=null; updateBanner(); renderAll(); window.scrollTo({top:0,behavior:'smooth'}); });
+  document.querySelectorAll('#roomTabs .room-tab[data-id]').forEach(t=>t.onclick=()=>{ if(dirty)saveRoom(); curRoom=t.dataset.id; selId=null; placing=null; updateBanner(); renderAll(); window.scrollTo({top:0,behavior:'smooth'}); });
   const add=document.getElementById('addRoomTab'); if(add) add.onclick=addRoom;
 }
 async function addRoom(){
   const name=prompt('New room name:'); if(!name) return;
-  try{ const r=await api('scope/room',{method:'POST',body:{project:PID,name:name.trim()}});
+  const floor = curFloor!=='All' ? curFloor : (FLOOR_ORDER[0]);
+  try{ const r=await api('scope/room',{method:'POST',body:{project:PID,name:name.trim(),floor}});
     DATA=await api('scope?project='+PID); curRoom=r.id; renderAll(); }catch(e){ alert(e.message); }
 }
 document.getElementById('delRoom').onclick=async()=>{ const r=room(); if(!r)return;
