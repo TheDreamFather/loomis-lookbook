@@ -236,6 +236,12 @@ async function ensureUsersColumns(env){
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN email TEXT").run(); } catch(e){}
   try { await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)").run(); } catch(e){}
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN active INTEGER DEFAULT 1").run(); } catch(e){}
+  // Backfill a stable id for any user row missing one. Users provisioned via the
+  // invite endpoint were inserted without an explicit id (the TEXT primary key
+  // allowed NULL), so their session token was signed with uid "null" and never
+  // resolved to a user — logins "succeeded" but no session persisted. Setting
+  // id = rowid gives every such user a valid, stable identifier.
+  try { await env.DB.prepare("UPDATE users SET id = CAST(rowid AS TEXT) WHERE id IS NULL OR id = ''").run(); } catch(e){}
 }
 function rowToProject(r){
   return { id:r.id, address_key:r.address_key, client_name:r.client_name, address:r.address,
@@ -542,6 +548,8 @@ export async function onRequest(context) {
         .prepare("INSERT INTO users (last_name,last4,role,name,project_ids,email,must_change_password) VALUES (?,?,?,?,?,?,1)")
         .bind(lastName || "", last4 || "", role, name || "", projectIds || "", email || null).run();
       const uid = res.meta.last_row_id;
+      // Persist the id so the row has a stable, non-null identifier (the token/session use it).
+      try { await env.DB.prepare("UPDATE users SET id = CAST(? AS TEXT) WHERE rowid = ?").bind(uid, uid).run(); } catch(e){}
       const token = await makeInviteToken(secretOf(env), uid);
       const accept_url = new URL(request.url).origin + "/invite.html?token=" + encodeURIComponent(token);
       return json({ ok: true, user_id: uid, role, token, accept_url });
