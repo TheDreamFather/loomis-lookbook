@@ -434,6 +434,32 @@
 
 <script>
 /* ============================================================
+   SESSION TOKEN (cookie-independent auth)
+   The browser/edge doesn't reliably persist the lb_session cookie,
+   so we also carry the signed session token in localStorage and send
+   it as Authorization: Bearer on every /api/ call. The backend accepts
+   either the Bearer token or the cookie.
+   ------------------------------------------------------------ */
+function lbGetToken(){ try{ return localStorage.getItem('lb_token')||''; }catch(e){ return ''; } }
+function lbSetToken(t){ try{ if(t) localStorage.setItem('lb_token',t); }catch(e){} }
+function lbClearToken(){ try{ localStorage.removeItem('lb_token'); }catch(e){} }
+(function(){
+  const _f = window.fetch.bind(window);
+  window.fetch = function(input, init){
+    init = init || {};
+    let u = typeof input === 'string' ? input : (input && input.url) || '';
+    const isApi = u.indexOf('/api/') === 0 || u.indexOf(location.origin + '/api/') === 0;
+    if (isApi){
+      const t = lbGetToken();
+      const h = new Headers((init && init.headers) || (typeof input!=='string' && input.headers) || {});
+      if (t && !h.has('authorization')) h.set('authorization', 'Bearer ' + t);
+      init = { ...init, headers: h };
+      if (!init.credentials) init.credentials = 'include';
+    }
+    return _f(input, init);
+  };
+})();
+/* ============================================================
    BRAND
    ------------------------------------------------------------
    To use the real BLS logo image, set BLS_LOGO to its URL (png/svg).
@@ -956,7 +982,7 @@ async function handleLogin(ev){
     const r=await fetch("/api/login",{method:"POST",credentials:"same-origin",headers:{"content-type":"application/json"},body:JSON.stringify({lastName:last,password:pass})});
     const d=await r.json();
     if(!r.ok||!d.ok){ err.textContent=d.error||"Sign in failed."; err.classList.add("show"); btn.disabled=false; btn.textContent="Sign in"; return false; }
-    LB_USER=d.user; updateAuthUI();
+    lbSetToken(d.token); LB_USER=d.user; updateAuthUI();
     if(d.mustChange){ renderSetPassword(); }
     else { renderProjectsHome(true); }
   }catch(e){ err.textContent="Network error. Please try again."; err.classList.add("show"); btn.disabled=false; btn.textContent="Sign in"; }
@@ -1189,7 +1215,7 @@ async function fetchMe(){
 }
 async function doLogout(){
   try{ await fetch("/api/logout",{method:"POST",credentials:"same-origin"}); }catch(e){}
-  LB_USER=null; updateAuthUI(); renderLogin();
+  lbClearToken(); LB_USER=null; updateAuthUI(); renderLogin();
 }
 
 /* ===================================================================
@@ -1276,7 +1302,7 @@ function showGate(err){
     const ln=(document.getElementById('sgLast').value||'').trim(), pin=document.getElementById('sgPin').value||'';
     const eEl=document.getElementById('sgErr');
     if(!ln||!pin){ eEl.textContent='Enter your last name and PIN.'; return; }
-    try{ const d=await api2('login',{method:'POST',body:{lastName:ln,password:pin}}); LB_USER=d.user; updateAuthUI(); g.style.display='none'; routeAfterLogin(); }
+    try{ const d=await api2('login',{method:'POST',body:{lastName:ln,password:pin}}); lbSetToken(d.token); LB_USER=d.user; updateAuthUI(); g.style.display='none'; routeAfterLogin(); }
     catch(e){ eEl.textContent=e.message||'Sign in failed.'; }
   };
   document.getElementById('sgBtn').onclick=submit;
@@ -1489,7 +1515,7 @@ async function editOwner(){
   const v=prompt('Owner email for this project (receives notes):',cur); if(v==null) return;
   try{ await api2('project-config',{method:'POST',body:{project:CUR_PID,owner_email:v}}); CUR_CFG.owner_email=v; renderDashHome(true); }catch(e){ alert(e.message); }
 }
-async function doLogout2(){ try{ await api2('logout',{method:'POST'}); }catch(e){} LB_USER=null; CUR_PID=null; CUR_CFG=null; updateAuthUI(); showGate(); }
+async function doLogout2(){ try{ await api2('logout',{method:'POST'}); }catch(e){} lbClearToken(); LB_USER=null; CUR_PID=null; CUR_CFG=null; updateAuthUI(); showGate(); }
 
 function mountNotes(){
   if(document.getElementById('notesWidget')) return;
