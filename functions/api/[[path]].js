@@ -107,7 +107,13 @@ function publicUser(user) {
   };
 }
 async function currentUser(context) {
-  const uid = await verifyToken(secretOf(context.env), parseCookies(context.request)[COOKIE]);
+  // Accept the session token via Authorization: Bearer (primary, cookie-independent)
+  // or the lb_session cookie (fallback). The Bearer path keeps sessions working even
+  // when the browser / edge won't persist the Set-Cookie.
+  const authHeader = context.request.headers.get("authorization") || "";
+  const bearer = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
+  const cookieTok = parseCookies(context.request)[COOKIE];
+  const uid = await verifyToken(secretOf(context.env), bearer || cookieTok);
   if (!uid || !context.env.DB) return null;
   const u = await context.env.DB
     .prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password,active,email FROM users WHERE id=?")
@@ -275,7 +281,7 @@ export async function onRequest(context) {
           : "Incorrect PIN." }, 401);
       }
       const token = await makeToken(secretOf(env), user.id);
-      return json({ ok: true, mustChange: !!firstTime, user: publicUser(user) }, 200, {
+      return json({ ok: true, mustChange: !!firstTime, user: publicUser(user), token }, 200, {
         "set-cookie": cookieHeader(token),
       });
     }
@@ -576,7 +582,7 @@ export async function onRequest(context) {
       const hash = await hashPassword(newPassword);
       await env.DB.prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?").bind(hash, uid).run();
       const stoken = await makeToken(secretOf(env), user.id);
-      return json({ ok: true, user: publicUser(user) }, 200, { "set-cookie": cookieHeader(stoken) });
+      return json({ ok: true, user: publicUser(user), token: stoken }, 200, { "set-cookie": cookieHeader(stoken) });
     }
 
     // ================= SCOPE VIEWER =================
