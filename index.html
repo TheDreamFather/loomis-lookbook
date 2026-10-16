@@ -1177,20 +1177,271 @@ async function doLogout(){
   LB_USER=null; updateAuthUI(); renderLogin();
 }
 
-/* ---- Initial render + routing (concept lookbook is public; Projects is gated) ---- */
-(async function(){
-  const h=(location.hash||"").replace("#","");
-  const authRoute = (h==="projects"||h==="portfolio"||h.indexOf("project-")===0);
-  if(!authRoute){ selectTab(LOOMIS.some(c=>c.id===h)?h:LOOMIS[0].id,false); }
-  await fetchMe();
-  if(h==="portfolio"){ showPortfolio(false); }
-  else if(h==="projects"){ showProjects(false); }
-  else if(h.indexOf("project-")===0){
-    const pid=h.slice("project-".length);
-    if(LB_USER && (LB_USER.projects||[]).includes(pid)){ selectProject(pid,false); }
-    else { showProjects(false); }
-  }
+/* ===================================================================
+   LOGIN-FIRST, PER-PROJECT ARCHITECTURE
+   - Whole site gated behind login (Last name / PIN).
+   - Internal (admin/sales): Projects list -> project dashboard with
+     category Visible/Hide controls, Plans + plan ingest, New Project.
+   - Client: lands on their project dashboard (visible categories only),
+     Plans first.
+   - Notes/questions overlay (bottom-right, reveal on proximity) -> emails
+     the project owner via /api/notes.
+   =================================================================== */
+(function injectArchCSS(){
+  const css = `
+  #siteGate{position:fixed;inset:0;z-index:300;background:radial-gradient(1200px 600px at 50% -10%, #171511, #060605 60%);display:none;align-items:center;justify-content:center}
+  .sg-card{width:min(92vw,380px);background:var(--panel,#141210);border:1px solid var(--line,#2a2720);border-radius:16px;padding:34px 30px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .sg-eyebrow{font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;color:var(--muted,#9a9388)}
+  .sg-title{font-family:var(--serif,'Instrument Serif',Georgia,serif);font-weight:400;font-size:40px;line-height:1;margin:6px 0 4px;color:var(--gold-2,#cbb488)}
+  .sg-sub{font-size:13px;color:var(--muted,#9a9388);margin:0 0 16px}
+  .sg-inp{width:100%;background:#0f0e0b;border:1px solid var(--line,#2a2720);border-radius:9px;color:var(--ivory,#efe9df);padding:12px 13px;font-size:15px;margin:7px 0;outline:none;text-align:center}
+  .sg-inp:focus{border-color:var(--gold,#b99a63)}
+  .sg-err{color:#c76b5a;font-size:12.5px;min-height:16px;margin:2px 0}
+  .sg-btn{width:100%;background:var(--gold,#b99a63);color:#1a150c;border:0;border-radius:9px;padding:12px;font-weight:800;font-size:14px;cursor:pointer;margin-top:6px}
+  .dcard{position:relative}
+  .dcard.dim{opacity:.55}
+  .vis-ctl{position:absolute;top:8px;right:8px;z-index:5}
+  .vis-ctl select{background:#0f0e0b;border:1px solid var(--gold,#b99a63);color:var(--gold-2,#cbb488);border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer}
+  .pd-drop.drag .pcard-media{outline:2px dashed var(--gold,#b99a63);outline-offset:-6px}
+  #notesWidget{position:fixed;right:0;bottom:0;z-index:250;display:flex;flex-direction:column;align-items:flex-end}
+  #notesWidget .nw-tab{margin:0 18px 0 0;background:var(--gold,#b99a63);color:#1a150c;font-weight:800;font-size:11.5px;letter-spacing:.04em;padding:7px 13px;border-radius:9px 9px 0 0;cursor:pointer;opacity:.55;transition:opacity .2s}
+  #notesWidget:hover .nw-tab,#notesWidget.open .nw-tab{opacity:1}
+  #notesWidget .nw-panel{width:min(90vw,320px);max-height:0;overflow:hidden;opacity:0;transition:max-height .25s,opacity .2s;background:var(--panel,#141210);border:1px solid var(--line,#2a2720);border-bottom:0;border-radius:12px 12px 0 0;margin-right:18px}
+  #notesWidget.open .nw-panel{max-height:320px;opacity:1}
+  .nw-head{font-size:12.5px;color:var(--muted,#9a9388);padding:13px 14px 8px;line-height:1.45}
+  #notesWidget textarea{width:calc(100% - 28px);margin:0 14px;background:#0f0e0b;border:1px solid var(--line,#2a2720);border-radius:8px;color:var(--ivory,#efe9df);padding:9px;font-size:13px;min-height:70px;resize:vertical;outline:none}
+  #notesWidget textarea:focus{border-color:var(--gold,#b99a63)}
+  .nw-row{display:flex;align-items:center;justify-content:space-between;padding:9px 14px 13px}
+  .nw-status{font-size:11.5px;color:var(--muted,#9a9388)}
+  #notesWidget .nw-row button{background:var(--gold,#b99a63);color:#1a150c;border:0;border-radius:8px;padding:7px 14px;font-weight:800;font-size:12.5px;cursor:pointer}
+  `;
+  const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
 })();
+
+let CUR_PID=null, CUR_CFG=null, CUR_NAME="";
+const api2=async(p,o={})=>{const r=await fetch('/api/'+p,{credentials:'same-origin',headers:{'content-type':'application/json'},...o,body:o.body?JSON.stringify(o.body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d;};
+const DASH_CATS=()=>[{id:'plans',label:'Plans',plans:true}].concat(LOOMIS.map(c=>({id:c.id,label:c.label})));
+
+function hideChrome(){ ['hero','navwrap'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
+  ['portfolioBtn','projBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';}); }
+function showContentArea(){ const c=document.getElementById('content'); if(c)c.style.display=''; hideChrome(); }
+
+function showGate(err){
+  hideChrome();
+  const c=document.getElementById('content'); if(c) c.style.display='none';
+  let g=document.getElementById('siteGate');
+  if(!g){ g=document.createElement('div'); g.id='siteGate'; document.body.appendChild(g); }
+  g.style.display='flex';
+  g.innerHTML=`<div class="sg-card">
+     <div class="sg-eyebrow">Better Living Systems</div>
+     <div class="sg-title">The Lookbook</div>
+     <p class="sg-sub">Private client presentation — please sign in.</p>
+     <input id="sgLast" class="sg-inp" placeholder="Last name" autocomplete="username">
+     <input id="sgPin" class="sg-inp" type="password" inputmode="numeric" placeholder="PIN" autocomplete="current-password">
+     <div class="sg-err" id="sgErr">${err?escapeHTML(err):''}</div>
+     <button class="sg-btn" id="sgBtn">Enter</button>
+   </div>`;
+  const submit=async()=>{
+    const ln=(document.getElementById('sgLast').value||'').trim(), pin=document.getElementById('sgPin').value||'';
+    const eEl=document.getElementById('sgErr');
+    if(!ln||!pin){ eEl.textContent='Enter your last name and PIN.'; return; }
+    try{ const d=await api2('login',{method:'POST',body:{lastName:ln,password:pin}}); LB_USER=d.user; updateAuthUI(); g.style.display='none'; routeAfterLogin(); }
+    catch(e){ eEl.textContent=e.message||'Sign in failed.'; }
+  };
+  document.getElementById('sgBtn').onclick=submit;
+  document.getElementById('sgPin').addEventListener('keydown',e=>{if(e.key==='Enter')submit();});
+  setTimeout(()=>{const el=document.getElementById('sgLast'); if(el) el.focus();},60);
+}
+
+function routeAfterLogin(){
+  const g=document.getElementById('siteGate'); if(g) g.style.display='none';
+  showContentArea();
+  if(LB_USER && (LB_USER.role==='admin'||LB_USER.role==='sales')){ showInternalProjects(); }
+  else if(LB_USER){ const pid=(LB_USER.projects||[])[0]; if(pid){ openDashboard(pid,false); } else { showNoProject(); } }
+  mountNotes();
+}
+function showNoProject(){
+  const c=document.getElementById('content');
+  c.innerHTML=`<div class="portal-bar"><span class="pb-user">Signed in as <b>${escapeHTML(LB_USER.name)}</b></span><button class="pb-signout" onclick="doLogout2()">Sign out</button></div>
+    <div class="coming"><span class="eyebrow">Your Lookbook</span><h2>No project assigned yet</h2><p>Your Better Living Systems rep hasn't linked a project to your account yet. Please check back soon.</p></div>`;
+}
+
+async function showInternalProjects(){
+  showContentArea();
+  const content=document.getElementById('content');
+  let projs=[]; try{ projs=(await api2('scope/projects')).projects||[]; }catch(e){}
+  const cards=projs.map(p=>`<button class="pcard" onclick="openDashboard('${escapeAttr(p.id)}',true)">
+     <div class="pcard-media"><img src="/${escapeAttr(p.id)}-plan-thumb.jpg" alt="${escapeAttr(p.name||p.id)}" onerror="this.style.opacity=.12"></div>
+     <div class="pcard-body"><div class="pcard-brand">Client Project</div><div class="pcard-title">${escapeHTML(p.name||p.id)}</div>
+     <div class="pcard-meta"><span>Open dashboard</span><span class="go">View <span class="arrow">&rarr;</span></span></div></div></button>`).join('');
+  content.innerHTML=`<div class="portal-bar"><span class="pb-user">Signed in as <b>${escapeHTML(LB_USER.name)}</b> <span class="pb-role">Internal</span></span>
+     <span><button class="pb-signout" onclick="newProjectFlow()" style="margin-right:14px">+ New Project</button><button class="pb-signout" onclick="doLogout2()">Sign out</button></span></div>
+   <div class="cat-head" style="margin-top:6px"><span class="eyebrow">Internal</span><h2>Projects</h2><p>Select a client project to open its dashboard, set category visibility, and manage plans.</p></div>
+   <div class="cat-grid">${cards||'<div class="empty-note">No projects yet. Use + New Project.</div>'}</div>`;
+  window.scrollTo({top:0});
+}
+
+function catVisible(id){ const v=CUR_CFG&&CUR_CFG.category_vis; if(!v) return true; return v[id]!==false; }
+
+async function openDashboard(pid, internal){
+  CUR_PID=pid;
+  showContentArea();
+  try{ CUR_CFG=await api2('project-config?project='+encodeURIComponent(pid)); }
+  catch(e){ CUR_CFG={category_vis:null,name:pid,owner_email:null,can_edit:!!internal}; }
+  CUR_NAME=CUR_CFG.name||pid;
+  renderDashHome(internal);
+  mountNotes();
+  if(location.hash!=="#project-"+pid) history.replaceState(null,"","#project-"+pid);
+}
+
+function renderDashHome(internal){
+  showContentArea();
+  const cats=DASH_CATS();
+  const cover=(c)=>{ if(c.plans) return '/'+CUR_PID+'-plan-thumb.jpg'; const L=LOOMIS.find(x=>x.id===c.id); const it=L&&L.items&&L.items.find(i=>i.image); return it?it.image:''; };
+  const cards=cats.filter(c=>internal||catVisible(c.id)).map(c=>{
+    const img=cover(c), vis=catVisible(c.id);
+    const drop = internal ? `<div class="vis-ctl"><select onchange="setVisibility('${c.id}',this.value)" onclick="event.stopPropagation()">
+        <option value="visible" ${vis?'selected':''}>Visible</option><option value="hide" ${!vis?'selected':''}>Hide</option></select></div>` : '';
+    return `<div class="dcard ${(!vis&&internal)?'dim':''}">${drop}
+      <button class="pcard" onclick="selectDashCat('${c.id}',${!!internal})">
+        <div class="pcard-media">${img?`<img src="${escapeAttr(img)}" alt="${escapeAttr(c.label)}" onerror="this.style.opacity=.12">`:`<div class="media-fallback"><div class="fi">&#9646;</div><span>${escapeHTML(c.label)}</span></div>`}</div>
+        <div class="pcard-body"><div class="pcard-brand">${c.plans?'Plans & room review':'Category'}</div><div class="pcard-title">${escapeHTML(c.label)}</div>
+        <div class="pcard-meta"><span>${c.plans?'Open plans':'Browse'}</span><span class="go">Open <span class="arrow">&rarr;</span></span></div></div>
+      </button></div>`;
+  }).join('');
+  const bar = internal
+    ? `<div class="portal-bar"><span class="pb-user"><b>${escapeHTML(CUR_NAME)}</b> <span class="pb-role">Internal · owner: ${escapeHTML(CUR_CFG.owner_email||'—')}</span></span>
+        <span><button class="pb-signout" onclick="editOwner()" style="margin-right:12px">Owner email</button><button class="pb-signout" onclick="showInternalProjects()" style="margin-right:12px">&larr; Projects</button><button class="pb-signout" onclick="doLogout2()">Sign out</button></span></div>`
+    : `<div class="portal-bar"><span class="pb-user">Welcome to <b>${escapeHTML(CUR_NAME)}</b></span><button class="pb-signout" onclick="doLogout2()">Sign out</button></div>`;
+  document.getElementById('content').innerHTML = bar +
+    `<div class="cat-head" style="margin-top:6px"><span class="eyebrow">${internal?'Dashboard (internal)':'Your Lookbook'}</span><h2>${escapeHTML(CUR_NAME)}</h2><p>${internal?'Set category visibility (Visible / Hide) and manage Plans. Clients see only Visible categories.':'Browse your selections, and open Plans for your room-by-room plan review.'}</p></div>
+     <div class="cat-grid">${cards}</div>`;
+  window.scrollTo({top:0});
+}
+
+async function setVisibility(catId,val){
+  CUR_CFG.category_vis = CUR_CFG.category_vis||{};
+  CUR_CFG.category_vis[catId] = (val==='visible');
+  try{ await api2('project-config',{method:'POST',body:{project:CUR_PID,category_vis:CUR_CFG.category_vis}}); }catch(e){ alert(e.message); }
+  const card=document.querySelector(`.dcard .vis-ctl select`); // refresh dim state
+  renderDashHome(true);
+}
+
+function selectDashCat(catId, internal){
+  if(catId==='plans'){ renderPlans(internal); return; }
+  const cat=LOOMIS.find(c=>c.id===catId); if(!cat) return;
+  renderCategory(cat);
+  const back=document.createElement('button'); back.className='back-link'; back.innerHTML='<span class="arrow">&larr;</span> Back to '+escapeHTML(CUR_NAME);
+  back.onclick=()=>renderDashHome(internal);
+  const c=document.getElementById('content'); c.insertBefore(back, c.firstChild);
+  window.scrollTo({top:0});
+}
+
+function renderPlans(internal){
+  const content=document.getElementById('content');
+  const toolUrl='/isleworth?project='+encodeURIComponent(CUR_PID);
+  content.innerHTML=`<button class="back-link" onclick="renderDashHome(${!!internal})"><span class="arrow">&larr;</span> Back to ${escapeHTML(CUR_NAME)}</button>
+    <div class="cat-head"><span class="eyebrow">${escapeHTML(CUR_NAME)}</span><h2>Plans</h2><p>Your reflected-ceiling / lighting plans and the room-by-room plan review.</p></div>
+    <div class="cat-grid">
+      <button class="pcard" onclick="location.href='${toolUrl}'"><div class="pcard-media"><img src="/${CUR_PID}-plan-thumb.jpg" alt="Plans" onerror="this.style.opacity=.12"></div>
+        <div class="pcard-body"><div class="pcard-brand">Room-by-room</div><div class="pcard-title">Open plan review</div><div class="pcard-meta"><span>Rooms, crops &amp; fixture counts</span><span class="go">Open <span class="arrow">&rarr;</span></span></div></div></button>
+      ${internal?`<div class="pcard pd-drop" id="plansDrop"><div class="pcard-media" style="display:flex;align-items:center;justify-content:center;flex-direction:column">
+        <div class="fi" style="font-size:32px">&#8682;</div><span style="font-size:12px;color:var(--muted);text-align:center;padding:0 14px;margin-top:6px">Drop a plans PDF here to auto-build rooms</span></div>
+        <div class="pcard-body"><div class="pcard-brand">Internal</div><div class="pcard-title">Add / replace plans</div><div class="pcard-meta" id="plansDropStatus"><span>PDF &rarr; best-effort room mapping</span></div></div>
+        <input type="file" id="plansFile" accept="application/pdf" style="display:none"></div>`:''}
+    </div>`;
+  if(internal) initPlansDrop();
+  window.scrollTo({top:0});
+}
+
+function initPlansDrop(){
+  const card=document.getElementById('plansDrop'), input=document.getElementById('plansFile');
+  if(!card) return;
+  card.querySelector('.pcard-media').onclick=()=>input.click();
+  input.onchange=e=>{ const f=e.target.files&&e.target.files[0]; if(f) ingestPlans(f); };
+  ['dragenter','dragover'].forEach(ev=>card.addEventListener(ev,e=>{e.preventDefault();card.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>card.addEventListener(ev,e=>{e.preventDefault();card.classList.remove('drag');}));
+  card.addEventListener('drop',e=>{ const f=e.dataTransfer.files&&e.dataTransfer.files[0]; if(f) ingestPlans(f); });
+}
+async function loadPdfJs(){ if(window.pdfjsLib) return window.pdfjsLib;
+  await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+  try{ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }catch(e){}
+  return window.pdfjsLib;
+}
+async function ingestPlans(file){
+  const status=document.getElementById('plansDropStatus');
+  const set=t=>{ if(status) status.innerHTML='<span>'+escapeHTML(t)+'</span>'; };
+  set('Reading '+file.name+'…');
+  let lib; try{ lib=await loadPdfJs(); }catch(e){ set('PDF engine failed to load.'); return; }
+  let pdf; try{ const buf=await file.arrayBuffer(); pdf=await lib.getDocument({data:buf}).promise; }catch(e){ set('Could not read that PDF.'); return; }
+  const nPages=Math.min(pdf.numPages,12); let allText='', pageUrls=[];
+  for(let i=1;i<=nPages;i++){ set('Rendering page '+i+' / '+nPages+'…');
+    const page=await pdf.getPage(i); let url=null;
+    for(const mq of [[1500,0.6],[1200,0.55],[950,0.5]]){ const vp1=page.getViewport({scale:1}); const scale=Math.min(2,mq[0]/vp1.width); const vp=page.getViewport({scale});
+      const cv=document.createElement('canvas'); cv.width=Math.ceil(vp.width); cv.height=Math.ceil(vp.height); const cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,cv.width,cv.height);
+      await page.render({canvasContext:cx,viewport:vp}).promise; const u=cv.toDataURL('image/jpeg',mq[1]); if(u.length<1200000){ url=u; break; } }
+    if(url){ try{ const r=await api2('scope/plan',{method:'POST',body:{project:CUR_PID,label:file.name.replace(/\.pdf$/i,'')+' p'+i,page_no:i,data_url:url}}); pageUrls.push(r.url); }catch(e){} }
+    try{ const tc=await page.getTextContent(); allText+=' '+tc.items.map(it=>it.str).join(' '); }catch(e){}
+  }
+  set('Detecting rooms…');
+  const text=String(allText||'').toLowerCase();
+  const ROOMWORDS=['kitchen','pantry','foyer','laundry','mudroom','mud room','garage','office','flex','powder','primary bath','primary bedroom','bedroom 2','bedroom 3','bedroom 4','bedroom 5','bedroom','bathroom 2','bathroom 3','bathroom 4','bathroom','master bath','master bedroom','great room','dining','living room','family room','closet','her wic','his wic','wic','pool bath','covered porch','porch','balcony','loft','storage','theater','recreation','gym','fitness','study','bar','corridor','entry','vestibule','wine','sauna','elevator','bridge','gallery','dressing','mud room'];
+  const found=[...new Set(ROOMWORDS.filter(w=>text.includes(w)))];
+  let created=0;
+  try{
+    const existing=(await api2('scope?project='+encodeURIComponent(CUR_PID))).rooms||[];
+    const have=new Set(existing.map(r=>r.name.toLowerCase()));
+    for(const w of found){ const nm=w.replace(/\b\w/g,c=>c.toUpperCase()); if(have.has(nm.toLowerCase())) continue;
+      try{ await api2('scope/room',{method:'POST',body:{project:CUR_PID,name:nm,floor:'Main'}}); created++; }catch(e){} }
+    if(pageUrls[0]){ try{ await api2('scope/assign-drawing',{method:'POST',body:{project:CUR_PID,drawing_url:pageUrls[0],all:true}}); }catch(e){} }
+  }catch(e){}
+  set('Ingested '+nPages+' page(s), detected '+found.length+' room(s), created '+created+'. Open the room tool to tighten per-room crops (low-confidence rooms flagged there).');
+}
+
+async function newProjectFlow(){
+  const name=prompt('New project name (client / residence):'); if(!name) return;
+  const owner=prompt('Owner (salesperson) email — gets this project’s notes:','corban@betterlivingsystems.com')||'corban@betterlivingsystems.com';
+  const lastName=prompt('Client sign-in LAST NAME (optional, for their login):','')||'';
+  try{
+    const r=await api2('scope/project',{method:'POST',body:{name,owner_email:owner,client_last_name:lastName,category_vis:{}}});
+    alert('Project "'+name+'" created (id: '+r.id+').\\nNext: set category visibility and drop the plans PDF on the Plans card.\\nThe client login ('+(lastName||'last name')+' + PIN) is provisioned with your admin tool.');
+    openDashboard(r.id,true);
+  }catch(e){ alert(e.message); }
+}
+async function editOwner(){
+  const cur=(CUR_CFG&&CUR_CFG.owner_email)||'';
+  const v=prompt('Owner email for this project (receives notes):',cur); if(v==null) return;
+  try{ await api2('project-config',{method:'POST',body:{project:CUR_PID,owner_email:v}}); CUR_CFG.owner_email=v; renderDashHome(true); }catch(e){ alert(e.message); }
+}
+async function doLogout2(){ try{ await api2('logout',{method:'POST'}); }catch(e){} LB_USER=null; CUR_PID=null; CUR_CFG=null; updateAuthUI(); showGate(); }
+
+function mountNotes(){
+  if(document.getElementById('notesWidget')) return;
+  const w=document.createElement('div'); w.id='notesWidget';
+  w.innerHTML=`<div class="nw-tab" id="nwTab">Notes &amp; Questions</div>
+    <div class="nw-panel" id="nwPanel">
+      <div class="nw-head">Hey — drop a note for one of our team members or ask a question and someone will get back with you as soon as possible.</div>
+      <textarea id="nwText" placeholder="Your note or question…"></textarea>
+      <div class="nw-row"><span class="nw-status" id="nwStatus"></span><button id="nwSend">Send</button></div>
+    </div>`;
+  document.body.appendChild(w);
+  const panel=document.getElementById('nwPanel');
+  const open=()=>w.classList.add('open');
+  document.addEventListener('mousemove',e=>{ if((window.innerWidth-e.clientX)<150 && (window.innerHeight-e.clientY)<150) open(); });
+  document.getElementById('nwTab').addEventListener('click',()=>w.classList.toggle('open'));
+  w.addEventListener('mouseleave',()=>setTimeout(()=>{ if(document.activeElement!==document.getElementById('nwText')) w.classList.remove('open'); },500));
+  document.getElementById('nwSend').onclick=async()=>{
+    const t=(document.getElementById('nwText').value||'').trim(), s=document.getElementById('nwStatus');
+    if(!t){ s.textContent='Write a note first.'; return; }
+    if(!CUR_PID){ s.textContent='Open a project first.'; return; }
+    s.textContent='Sending…';
+    try{ const d=await api2('notes',{method:'POST',body:{project:CUR_PID,message:t}}); document.getElementById('nwText').value=''; s.textContent=d.emailed?'Sent ✓ — a team member will reply.':'Saved ✓ (email routing pending setup).'; }
+    catch(e){ s.textContent=e.message||'Could not send.'; }
+  };
+}
+
+/* ---- Boot: login-first ---- */
+(async function(){ hideChrome(); await fetchMe(); if(!LB_USER){ showGate(); } else { routeAfterLogin(); } })();
 </script>
 </body>
 </html>
