@@ -1146,10 +1146,13 @@ async function postComment(ev,projectId){
 }
 
 function goHome(){
-  /* Always return to the generic concept-lookbook home from anywhere
-     (Projects portal, Portfolio, a project view, or the login screen). */
-  setActiveNav(null);
-  selectTab(LOOMIS[0].id,false);   /* restores concept content + clears portal state, no auto-scroll */
+  /* Login-aware home. From anywhere in the app (inside a category, the Plans
+     tool, a floor viewer, etc.) return to the correct landing screen without
+     logging the user out: internal users -> Projects home; clients -> their
+     project's category dashboard; signed-out -> the login gate. */
+  try{ closeFloorView(); }catch(e){}
+  if(!LB_USER){ showGate(); window.scrollTo({top:0}); return; }
+  routeAfterLogin();
   window.scrollTo({top:0,behavior:"smooth"});
 }
 
