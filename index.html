@@ -1,7 +1,3 @@
-https://raw.githubusercontent.com/TheDreamFather/loomis-lookbook/main/index.html
-→ https://raw.githubusercontent.com/TheDreamFather/loomis-lookbook/main/index.html
-Content-Type: text/plain; charset=utf-8
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -616,6 +612,29 @@ const LOOMIS = [
 
 const PROJECTS = [
   {
+    id:"diaz",
+    title:"Diaz Residence",
+    subtitle:"Circadian lighting — product selections and room-by-room plan review.",
+    cover:"/diaz-plan-thumb.jpg",
+    menu:[
+      {type:"image",title:"Ketra",brand:"Lutron",description:"Natural white light, 1,400K–10,000K with Vibrancy color rendering and Color Lock consistency.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-02/ketra.jpg",link:"https://www.lutron.com/us/en/lighting/ketra"},
+      {type:"image",title:"Native by Design",brand:"Lutron",description:"Lutron's intelligent light with world-class design-partner fixtures.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-08/web-native-by-design.png",link:"https://www.lutron.com/us/en/partnerships/native-by-design"},
+      {type:"image",title:"Security Systems",brand:"alarm.com",description:"Professional-grade security on the alarm.com platform with the Qolsys IQ panel.",image:"https://tyco.widen.net/content/7rbmiuaw7s/jpeg/IQ%20Panel%204%201380x1037.jpeg?position=c&color=ffffffff&quality=80&u=qderxx",link:"https://www.alarm.com"},
+      {type:"image",title:"Extreme Home Theatre",brand:"KEF",description:"THX-Certified Dominus & Ultra architectural speaker systems for fully immersive cinema sound.",image:"https://us.kef.com/cdn/shop/collections/Hero_DT_1440x810_4.jpg?v=1783071876",link:"https://us.kef.com/collections/extreme-home-theatre"},
+      {type:"image",title:"Palladiom Roller Shades",brand:"Lutron Shades",description:"Architectural precision and refined hardware for roller shades.",image:"https://www.lutron.com/us/sites/hub_americas/files/styles/content_two_thirds_desktop_medium_2x/public/2024-11/sitting-area-blackrock-eric-laignel-45.jpg",link:"https://www.lutron.com/us/en/window-treatments/shades/palladiom-roller-shades"},
+      {type:"image",title:"Palladiom Drapery",brand:"Lutron Drapes",description:"Automated drapery track that draws fabric with quiet precision, on scene.",image:"https://assets.lutron.com/a/pdp/palladiom/palladiom-pa-fr-c4d0-4988.jpg",link:"https://www.lutron.com/us/en/window-treatments/drapery/palladiom-drapery"},
+      {type:"image",title:"Palladiom Keypads",brand:"Lutron · Control",description:"Sculpted metal keypads that read as architecture, not electronics.",image:"https://www.lutron.com/us/sites/hub_americas/files/styles/content_two_thirds_desktop_medium_2x/public/2024-11/bedroom-with-wallpaper-ritz-tower-palladiom-keypad-with-hand-29.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/palladiom"},
+      {type:"image",title:"Alisse Keypads",brand:"Lutron · Control",description:"An elegant, refined keypad with jewel-like detailing.",image:"https://assets.lutron.com/a/pdp/hw-qs-b-s1/hw-qs-b-s1-ph-fr-w-a3bb-4066.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/alisse"},
+      {type:"image",title:"Aviena Keypads",brand:"Lutron · Control",description:"Next-generation keypad balancing clean design with scene-based control.",image:"https://assets.lutron.com/a/pdp/hw-av-kp-s/hw-av-kp-s-ab-ph-fr-w-90de-4195.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/aviena"},
+      {type:"image",title:"Sunnata Controls",brand:"Lutron · Control",description:"Intuitive touch or swipe dimming with whole-home polish.",image:"https://assets.lutron.com/a/pdp/rrst-w4b/rrst-w4b-wh-ph-fr-w-b679-4432.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/sunnata"},
+      {type:"image",title:"Pico Remotes",brand:"Lutron · Control",description:"Handheld, tabletop or wall-mounted control for lights, shades and scenes.",image:"https://assets.lutron.com/a/pdp/pj2-3brl/pj2-3brl-gwh-ph-fr-828c-43bc.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/pico"},
+      {type:"image",title:"AI Control for the Smart Home",brand:"Josh.ai · Control",description:"Natural-language AI voice and touch control, private by design.",image:"https://d35408cyocioye.cloudfront.net/marketing/hero-videos/home-hero-video-loop-20260616-poster.png",link:"https://josh.ai/"},
+      {type:"image",title:"ELAN Control (OS 9)",brand:"ELAN by Nice · Control",description:"Award-winning whole-home control with touch panels and natural-language voice.",image:"assets/elan-remote.jpg",link:"https://www.niceforyou.com/na/solutions/control-systems"},
+      {type:"image",title:"iPad Enclosures & Docks",brand:"IPORT · Control",description:"Enterprise-grade iPad wall stations, mounts and PoE charging docks.",image:"assets/iport.jpg",link:"https://iport.io/"},
+      {type:"image",title:"Plans",brand:"Room-by-room plan review",description:"Open the scope tool — every room, its RCP plan crop, and total fixture counts.",image:"/diaz-plan-thumb.jpg",plans:true,planUrl:"/isleworth?project=diaz"}
+    ]
+  },
+  {
     id:"sample-estate",
     title:"Sample Install — Hillside Estate",
     subtitle:"Placeholder gallery showing the layout. Replace with a real closed project — photos + device tags.",
@@ -777,6 +796,32 @@ function renderProject(proj){
     <div class="gallery">${photos}</div>`;
 }
 
+function renderProjectMenu(proj){
+  const content=document.getElementById("content");
+  const cards=(proj.menu||[]).map(it=>{
+    if(it.plans){
+      return `<article class="card" style="cursor:pointer" onclick="location.href='${it.planUrl}'">
+        ${mediaHTML(it)}
+        <div class="card-body">
+          <div class="card-brand">${escapeHTML(it.brand||"")}</div>
+          <h3 class="card-title">${escapeHTML(it.title)}</h3>
+          <p class="card-desc">${escapeHTML(it.description||"")}</p>
+          <div class="card-foot"><a class="card-link" href="${it.planUrl}">Open plan review <span class="arrow">&rarr;</span></a></div>
+        </div></article>`;
+    }
+    return cardHTML(it);
+  }).join("");
+  content.innerHTML = `
+    <button class="back-link" onclick="showProjects()"><span class="arrow">&larr;</span> All Projects</button>
+    <div class="cat-head">
+      <span class="eyebrow">${escapeHTML(proj.title)}</span>
+      <h2>Selections &amp; Plans</h2>
+      <p>${escapeHTML(proj.subtitle||"")}</p>
+    </div>
+    <div class="grid">${cards}</div>`;
+  content.querySelectorAll(".card").forEach(c=>c.classList.add("in"));
+}
+
 function toggleHotspot(ev,el){
   ev.preventDefault(); ev.stopPropagation();
   const wasOpen = el.classList.contains("show");
@@ -818,34 +863,18 @@ function catalogCardHTML(p){
     ? `<div class="pcard-media"><img src="${escapeAttr(cover)}" alt="${escapeAttr(p.title)}" onerror="this.style.opacity=.2"></div>`
     : `<div class="pcard-media"><div class="media-fallback">${iconImage()}<span>Cover Placeholder</span></div></div>`;
   const flag = p.placeholder ? `<span class="pcard-flag">Sample</span>` : "";
-  const meta = `${photoCount} photo${photoCount!==1?'s':''}${deviceCount?` &middot; ${deviceCount} tagged`:''}`;
-  const scopeHref = `/isleworth.html?project=${encodeURIComponent(p.id)}&name=${encodeURIComponent(p.title)}`;
+  const meta = p.menu ? 'Selections &amp; room-by-room plans' : `${photoCount} photo${photoCount!==1?'s':''}${deviceCount?` &middot; ${deviceCount} tagged`:''}`;
   return `<button class="pcard" onclick="selectProject('${p.id}')" aria-label="Open ${escapeAttr(p.title)}">
       ${media}${flag}
       <div class="pcard-body">
-        <div class="pcard-brand">Completed Installation</div>
+        <div class="pcard-brand">${p.menu?'Active Project':'Completed Installation'}</div>
         <div class="pcard-title">${escapeHTML(p.title)}</div>
         ${p.subtitle?`<div class="pcard-sub">${escapeHTML(p.subtitle)}</div>`:""}
         <div class="pcard-meta"><span>${meta}</span><span class="go">View <span class="arrow">&rarr;</span></span></div>
-        <div class="pcard-meta" style="margin-top:6px;border-top:1px solid var(--line,#2a2720);padding-top:7px"><span style="color:var(--muted,#9a9388);font-size:11px">Scope-by-Room</span><span class="go" style="color:#cbb488" onclick="event.stopPropagation();location.href='${scopeHref}'">Open scope <span class="arrow">&rarr;</span></span></div>
       </div>
     </button>`;
 }
 
-// Working-project card for the Loomis Isleworth room-by-room scope viewer.
-// Opens the persistent scope page rather than a photo gallery. Team-only.
-function isleworthCardHTML(){
-  return `<button class="pcard" onclick="location.href='/isleworth.html'" aria-label="Open Loomis Isleworth Scope">
-      <div class="pcard-media"><div class="media-fallback">${iconImage()}<span>Room-by-Room Scope</span></div></div>
-      <span class="pcard-flag" style="background:#b99a63;color:#1a150c">Working</span>
-      <div class="pcard-body">
-        <div class="pcard-brand">Active Project &middot; Isleworth</div>
-        <div class="pcard-title">Loomis Isleworth</div>
-        <div class="pcard-sub">Full-scope, room-by-room — drawings, scope &amp; call-outs. Editable by the team.</div>
-        <div class="pcard-meta"><span>Scope viewer</span><span class="go">Open <span class="arrow">&rarr;</span></span></div>
-      </div>
-    </button>`;
-}
 function renderCatalog(ids){
   const list = ids ? PROJECTS.filter(p=>ids.includes(p.id)) : PROJECTS;
   const cards = list.length
@@ -988,18 +1017,15 @@ function renderProjectsHome(scroll=true){
   if(LB_USER.mustChange){ renderSetPassword(); return; }
   const isAdmin = LB_USER.role==="admin";
   const mine = isAdmin ? PROJECTS.slice() : PROJECTS.filter(p=>(LB_USER.projects||[]).includes(p.id));
-  if(!isAdmin && LB_USER.role==="client" && mine.length===1){ selectProject(mine[0].id, scroll); return; }
+  if(!isAdmin && LB_USER.role==="client" && mine.length===1 && !mine[0].menu){ selectProject(mine[0].id, scroll); return; }
   const eyebrow = isAdmin ? "Owner Portal" : (LB_USER.role==="sales"?"Sales Portal":"Your Lookbook");
   const intro = isAdmin
     ? "Owner view — every project across all reps and clients. Open one to review its gallery and the comments &amp; requests."
     : (LB_USER.role==="sales"
         ? "Projects assigned to you. Open one to review its gallery and the client's comments &amp; requests."
         : "Your project lookbook. Open a project to view its gallery and leave comments or requests.");
-  const isTeam = isAdmin || LB_USER.role==="sales";
-  const scopeCard = isTeam ? isleworthCardHTML() : "";
-  const cards = (isAdmin ? PROJECTS : mine).map(catalogCardHTML).join("");
-  const grid = (scopeCard || cards)
-    ? `<div class="cat-grid">${scopeCard}${cards}</div>`
+  const grid = mine.length
+    ? (isAdmin ? renderCatalog() : renderCatalog(LB_USER.projects||[]))
     : `<div class="empty-note">No projects are assigned to your account yet.</div>`;
   document.getElementById("content").innerHTML = greetingBar() + `
     <div class="cat-head" style="margin-top:6px">
@@ -1028,6 +1054,7 @@ function selectProject(id,scroll=true){
   const isAdmin = LB_USER.role==="admin";
   if(!isAdmin && !(LB_USER.projects||[]).includes(id)){ showProjects(scroll); return; }
   setActiveNav("projects");
+  if(proj.menu){ renderProjectMenu(proj); if(location.hash!=="#project-"+id) history.replaceState(null,"","#project-"+id); if(scroll) scrollToContent(); return; }
   renderProject(proj);
   mountCommentPanel(proj.id);
   if(location.hash!=="#project-"+id) history.replaceState(null,"","#project-"+id);
