@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diaz — Project Portal · Better Living Systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Instrument+Serif:ital@0;1&display=swap">
+<style>
+  :root{--bg:#060605;--bg2:#121110;--panel:#17150f;--panel2:#1c1a14;--line:#2a2720;--gold:#b99a63;--gold-2:#cbb488;--text:#efe9df;--muted:#9a9388;}
+  *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font-family:Lato,Helvetica,Arial,sans-serif}
+  a{color:var(--gold-2)}
+  .topbar{display:flex;align-items:center;gap:14px;padding:13px 22px;border-bottom:1px solid var(--line);background:var(--bg2);position:sticky;top:0;z-index:40;flex-wrap:wrap}
+  .brand .eyebrow{font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .brand h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:24px;margin:1px 0 0;color:var(--gold-2);line-height:1}
+  .spacer{margin-left:auto}
+  .btn{background:var(--gold);color:#1a150c;border:0;border-radius:7px;padding:8px 13px;font-weight:800;font-size:12.5px;cursor:pointer;text-decoration:none;display:inline-block}
+  .btn.ghost{background:transparent;border:1px solid var(--line);color:var(--text);font-weight:700}
+  /* gate */
+  .gate{max-width:380px;margin:14vh auto;text-align:center;padding:30px;background:var(--bg2);border:1px solid var(--line);border-radius:14px}
+  .gate .eyebrow{font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:var(--muted)}
+  .gate h1{font-family:'Instrument Serif',Georgia,serif;font-weight:400;color:var(--gold-2);font-size:34px;margin:4px 0 2px}
+  .gate p{color:var(--muted);font-size:13px}
+  .gate input{width:100%;background:#0f0e0b;border:1px solid var(--line);border-radius:8px;color:var(--text);padding:11px 12px;font-size:15px;margin:8px 0;outline:none;text-align:center}
+  .gate input:focus{border-color:var(--gold)}
+  .gate .btn{width:100%;padding:11px;font-size:14px;margin-top:6px}
+  .gate .err{color:#c76b5a;font-size:12.5px;min-height:16px}
+  /* links strip */
+  .links-wrap{border-bottom:1px solid var(--line);background:#0e0d0b;padding:14px 22px}
+  .links-head{font-size:10.5px;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold-2);font-weight:800;margin-bottom:10px}
+  .links{display:flex;gap:12px;overflow-x:auto;padding-bottom:6px}
+  .lk{flex:0 0 auto;width:168px;border:1px solid var(--line);border-radius:10px;background:var(--panel);overflow:hidden;text-decoration:none;color:var(--text);transition:border-color .12s,transform .12s}
+  .lk:hover{border-color:var(--gold);transform:translateY(-2px)}
+  .lk img{width:100%;height:98px;object-fit:cover;background:#0c0b09;display:block;border-bottom:1px solid var(--line)}
+  .lk .m{padding:8px 10px}
+  .lk .t{font-size:12.5px;font-weight:800;color:var(--gold-2);line-height:1.2}
+  .lk .b{font-size:10.5px;color:var(--muted);margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+  .lk .go{font-size:10.5px;color:var(--muted);margin-top:5px}.lk:hover .go{color:var(--gold-2)}
+  .toolframe{width:100%;height:calc(100vh - 220px);min-height:520px;border:0;display:block;background:var(--bg)}
+  #app{display:none}
+</style></head>
+<body>
+<div id="gate" class="gate">
+  <div class="eyebrow">Better Living Systems</div>
+  <h1>Diaz</h1>
+  <p>Enter your access name and PIN to view the project.</p>
+  <input id="gName" placeholder="Name" autocomplete="username" value="Diaz">
+  <input id="gPin" placeholder="PIN" type="password" autocomplete="current-password" inputmode="numeric">
+  <div class="err" id="gErr"></div>
+  <button class="btn" id="gBtn">Enter</button>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="brand"><div class="eyebrow">Better Living Systems · Project Portal</div><h1>Diaz — Scope &amp; Selections</h1></div>
+    <span class="spacer"></span>
+    <a class="btn ghost" href="/isleworth?project=diaz" target="_blank">Open full scope tool ↗</a>
+    <button class="btn ghost" id="outBtn">Sign out</button>
+  </div>
+  <div class="links-wrap">
+    <div class="links-head">Selected product references — tap to open</div>
+    <div class="links" id="linksRow"></div>
+  </div>
+  <iframe class="toolframe" id="tool" title="Diaz scope by room"></iframe>
+</div>
+
+<script>
+const LINKS=[
+ {t:"Ketra",b:"Lutron",img:"https://www.lutron.com/us/sites/hub_americas/files/2025-02/ketra.jpg",link:"https://www.lutron.com/us/en/lighting/ketra"},
+ {t:"Native by Design",b:"Lutron",img:"https://www.lutron.com/us/sites/hub_americas/files/2025-08/web-native-by-design.png",link:"https://www.lutron.com/us/en/partnerships/native-by-design"},
+ {t:"Security Systems",b:"alarm.com",img:"https://tyco.widen.net/content/7rbmiuaw7s/jpeg/IQ%20Panel%204%201380x1037.jpeg?position=c&color=ffffffff&quality=80&u=qderxx",link:"https://www.alarm.com"},
+ {t:"Extreme Home Theatre",b:"KEF",img:"https://us.kef.com/cdn/shop/collections/Hero_DT_1440x810_4.jpg?v=1783071876",link:"https://us.kef.com/collections/extreme-home-theatre"},
+ {t:"Palladiom Roller Shades",b:"Lutron",img:"https://www.lutron.com/us/sites/hub_americas/files/styles/content_two_thirds_desktop_medium_2x/public/2024-11/sitting-area-blackrock-eric-laignel-45.jpg",link:"https://www.lutron.com/us/en/window-treatments/shades/palladiom-roller-shades"},
+ {t:"Palladiom Drapery",b:"Lutron",img:"https://assets.lutron.com/a/pdp/palladiom/palladiom-pa-fr-c4d0-4988.jpg",link:"https://www.lutron.com/us/en/window-treatments/drapery/palladiom-drapery"},
+ {t:"Palladiom Keypads",b:"Lutron · Control",img:"https://www.lutron.com/us/sites/hub_americas/files/styles/content_two_thirds_desktop_medium_2x/public/2024-11/bedroom-with-wallpaper-ritz-tower-palladiom-keypad-with-hand-29.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/palladiom"},
+ {t:"Alisse Keypads",b:"Lutron · Control",img:"https://assets.lutron.com/a/pdp/hw-qs-b-s1/hw-qs-b-s1-ph-fr-w-a3bb-4066.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/alisse"},
+ {t:"Aviena Keypads",b:"Lutron · Control",img:"https://assets.lutron.com/a/pdp/hw-av-kp-s/hw-av-kp-s-ab-ph-fr-w-90de-4195.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/aviena"},
+ {t:"Sunnata Controls",b:"Lutron · Control",img:"https://assets.lutron.com/a/pdp/rrst-w4b/rrst-w4b-wh-ph-fr-w-b679-4432.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/sunnata"},
+ {t:"Pico Remotes",b:"Lutron · Control",img:"https://assets.lutron.com/a/pdp/pj2-3brl/pj2-3brl-gwh-ph-fr-828c-43bc.jpg",link:"https://www.lutron.com/us/en/controls/keypads-remotes/pico"},
+ {t:"AI Control (Josh.ai)",b:"Josh.ai · Control",img:"https://d35408cyocioye.cloudfront.net/marketing/hero-videos/home-hero-video-loop-20260616-poster.png",link:"https://josh.ai/"},
+ {t:"ELAN Control (OS 9)",b:"ELAN by Nice · Control",img:"/assets/elan-remote.jpg",link:"https://www.niceforyou.com/na/solutions/control-systems"},
+ {t:"iPad Enclosures & Docks",b:"IPORT · Control",img:"/assets/iport.jpg",link:"https://iport.io/"}
+];
+function renderLinks(){
+  document.getElementById('linksRow').innerHTML=LINKS.map(x=>
+   `<a class="lk" href="${x.link}" target="_blank" rel="noopener">
+      <img src="${x.img}" alt="${x.t}" loading="lazy" onerror="this.style.display='none'">
+      <div class="m"><div class="t">${x.t}</div><div class="b">${x.b}</div><div class="go">Visit site ↗</div></div>
+    </a>`).join('');
+}
+async function me(){ try{ const r=await fetch('/api/me',{credentials:'include'}); const j=await r.json(); return j.user; }catch(e){ return null; } }
+function showApp(){
+  document.getElementById('gate').style.display='none';
+  document.getElementById('app').style.display='block';
+  renderLinks();
+  const f=document.getElementById('tool'); if(!f.src) f.src='/isleworth?project=diaz';
+}
+async function tryLogin(){
+  const name=document.getElementById('gName').value.trim();
+  const pin=document.getElementById('gPin').value;
+  const err=document.getElementById('gErr'); err.textContent='';
+  if(!name||!pin){ err.textContent='Enter your name and PIN.'; return; }
+  try{
+    const r=await fetch('/api/login',{method:'POST',credentials:'include',headers:{'content-type':'application/json'},body:JSON.stringify({lastName:name,password:pin})});
+    const j=await r.json();
+    if(j.ok){ showApp(); } else { err.textContent=j.error||'Not recognized.'; }
+  }catch(e){ err.textContent='Could not sign in — try again.'; }
+}
+document.getElementById('gBtn').onclick=tryLogin;
+document.getElementById('gPin').addEventListener('keydown',e=>{ if(e.key==='Enter') tryLogin(); });
+document.getElementById('outBtn').onclick=async()=>{ await fetch('/api/logout',{method:'POST',credentials:'include'}); location.reload(); };
+(async function(){ const u=await me(); if(u) showApp(); else document.getElementById('gPin').focus(); })();
+</script>
+</body></html>
