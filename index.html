@@ -477,7 +477,12 @@ const LOOMIS = [
       {type:"video",title:"Ketra",brand:"Lutron",description:"The most innovative light source since the filament bulb — natural white light from 1,400K–10,000K with Vibrancy color rendering and Color Lock consistency for life.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-02/ketra.jpg",videoUrl:"https://www.youtube-nocookie.com/embed/K-Jq5YdwMQs",link:"https://www.lutron.com/us/en/lighting/ketra"},
       {type:"image",title:"Rania",brand:"Lutron",description:"Exceptional, natural-feeling light for high-craft lamps and luminaires — designed to feel more true-to-life than tunable white and warm dim.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-02/lighting-rania.jpg",videoUrl:"",link:"https://www.lutron.com/us/en/lighting/rania"},
       {type:"image",title:"Native by Design",brand:"Lutron",description:"A collaboration between Lutron's intelligent light and world-class design partners — fixtures that redefine how a space looks, feels, and functions.",image:"https://www.lutron.com/us/sites/hub_americas/files/2025-08/web-native-by-design.png",videoUrl:"",link:"https://www.lutron.com/us/en/partnerships/native-by-design"},
-      {type:"image",title:"Cove & Step Lighting",brand:"Luminii",description:"Architectural linear and cove lighting — seamless grazing, step and detail light integrated into the architecture, as realized at the Lotte Hotel Hanoi Sky Garden.",image:"https://s3.us-central-1.wasabisys.com/luminiiwpmediafolder/wp-media-folder-luminii/wp-content/uploads/2024/05/Lotte-Hotel-Hanoi_sky-garden-1.jpg",videoUrl:"",link:"https://www.luminii.com/gallery/lotte-hotel-hanoi/"}
+      {type:"image",title:"Luminii",brand:"Luminii",description:"Specification-grade architectural linear and LED lighting — custom luminaires, modular systems and components, detailed from conception to installation.",image:"/lum-luminii.jpg",videoUrl:"",link:"https://www.luminii.com/brands/luminii/"},
+      {type:"image",title:"Optic Arts",brand:"Luminii",description:"Precision linear and downlighting by Optic Arts — clean architectural lines engineered for high-craft residential and commercial interiors.",image:"/lum-optic-arts.jpg",videoUrl:"",link:"https://www.luminii.com/brands/optic-arts/"},
+      {type:"image",title:"Precision",brand:"Luminii",description:"Precision architectural downlighting — tight beam control and refined apertures that disappear into the ceiling plane.",image:"/lum-precision.jpg",videoUrl:"",link:"https://www.luminii.com/brands/precision/"},
+      {type:"image",title:"Stenos",brand:"Luminii",description:"Ultra-thin linear lighting — the slimmest profiles for cove, grazing and detail light integrated seamlessly into the architecture.",image:"/lum-stenos.jpg",videoUrl:"",link:"https://www.luminii.com/brands/stenos/"},
+      {type:"image",title:"Glint",brand:"Luminii",description:"Micro-optic detail and accent lighting — jewel-like points of light for millwork, display and architectural accents.",image:"/lum-glint.jpg",videoUrl:"",link:"https://www.luminii.com/brands/glint/"},
+      {type:"image",title:"Filix",brand:"Luminii",description:"Decorative architectural lighting from the Filix family — sculptural fixtures that pair design-forward form with specification-grade performance.",image:"/lum-filix.jpg",videoUrl:"",link:"https://www.filixlighting-usa.com/"}
     ]
   },
   {
@@ -710,13 +715,16 @@ function mediaHTML(item){
   return `<div class="card-media${item.fit==='contain'?' fit-contain':''}" data-embed='${embed?JSON.stringify(embed):""}'>${inner}${flag}</div>`;
 }
 
-function cardHTML(item){
+function cardHTML(item,opts){
+  opts=opts||{};
   const link = item.link && item.link.trim()!==""
     ? `<a class="card-link" href="${item.link}" target="_blank" rel="noopener">Explore <span class="arrow">&rarr;</span></a>`
     : `<span class="card-link disabled">Link pending</span>`;
   const brand = item.brand ? `<div class="card-brand">${escapeHTML(item.brand)}</div>` : "";
+  const drop = opts.internal && opts.key ? `<div class="vis-ctl"><select onclick="event.stopPropagation()" onchange="setItemVis('${opts.key}',this.value)">
+        <option value="visible" ${opts.vis?'selected':''}>Visible</option><option value="hide" ${!opts.vis?'selected':''}>Hide</option></select></div>` : "";
   return `
-    <article class="card">
+    <article class="card${(opts.internal&&opts.vis===false)?' dim':''}">${drop}
       ${mediaHTML(item)}
       <div class="card-body">
         ${brand}
@@ -727,10 +735,14 @@ function cardHTML(item){
     </article>`;
 }
 
-function renderCategory(cat){
+function renderCategory(cat,internal){
+  if(internal===undefined) internal=CUR_INTERNAL;
+  CUR_CATID=cat.id;
   const content = document.getElementById("content");
-  const cards = cat.items.length
-    ? cat.items.map(it=>cardHTML(it)).join("")
+  const withKeys = cat.items.map((it,idx)=>({it,key:itemKey(cat.id,it,idx),vis:itemVisible(itemKey(cat.id,it,idx))}));
+  const shown = internal ? withKeys : withKeys.filter(x=>x.vis);
+  const cards = shown.length
+    ? shown.map(x=>cardHTML(x.it,{internal,key:x.key,vis:x.vis})).join("")
     : `<div class="empty-note">No concepts added yet for ${escapeHTML(cat.label)}.</div>`;
   content.innerHTML = `
     <div class="cat-head">
@@ -1200,7 +1212,18 @@ async function doLogout(){
   .sg-btn{width:100%;background:var(--gold,#b99a63);color:#1a150c;border:0;border-radius:9px;padding:12px;font-weight:800;font-size:14px;cursor:pointer;margin-top:6px}
   .dcard{position:relative}
   .dcard.dim{opacity:.55}
-  .vis-ctl{position:absolute;top:8px;right:8px;z-index:5}
+  .card{position:relative}
+  .card.dim{opacity:.5}
+  .fv-ov{position:fixed;inset:0;background:rgba(8,8,6,.94);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column}
+  .fv-ov.on{display:flex}
+  .fv-stage{position:relative;width:100%;height:100%;overflow:hidden;cursor:grab}
+  .fv-stage.drag{cursor:grabbing}
+  .fv-stage img{position:absolute;top:50%;left:50%;transform-origin:center;transform:translate(-50%,-50%) scale(1);will-change:transform;user-select:none;-webkit-user-drag:none;max-width:none}
+  .fv-bar{position:absolute;top:14px;left:0;right:0;display:flex;align-items:center;justify-content:center;gap:10px;z-index:3;pointer-events:none}
+  .fv-bar>*{pointer-events:auto}
+  .fv-title{color:var(--gold-2,#cbb488);font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:rgba(15,14,11,.75);padding:7px 14px;border-radius:999px}
+  .fv-btn{background:#0f0e0b;border:1px solid var(--gold,#b99a63);color:var(--gold-2,#cbb488);border-radius:8px;padding:7px 12px;font-size:14px;font-weight:700;cursor:pointer}
+  .fv-hint{position:absolute;bottom:16px;left:0;right:0;text-align:center;color:#8c8678;font-size:12px;z-index:3}
   .vis-ctl select{background:#0f0e0b;border:1px solid var(--gold,#b99a63);color:var(--gold-2,#cbb488);border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer}
   .pd-drop.drag .pcard-media{outline:2px dashed var(--gold,#b99a63);outline-offset:-6px}
   #notesWidget{position:fixed;right:0;bottom:0;z-index:250;display:flex;flex-direction:column;align-items:flex-end}
@@ -1218,7 +1241,12 @@ async function doLogout(){
   const s=document.createElement('style'); s.textContent=css; document.head.appendChild(s);
 })();
 
-let CUR_PID=null, CUR_CFG=null, CUR_NAME="";
+let CUR_PID=null, CUR_CFG=null, CUR_NAME="", CUR_INTERNAL=false, CUR_CATID=null;
+function itemKey(catId,item,idx){ return catId+'::'+String(item.title||('i'+idx)).toLowerCase().replace(/[^a-z0-9]+/g,'-'); }
+function itemVisible(key){ const v=CUR_CFG&&CUR_CFG.category_vis; if(!v) return true; return v['__item__'+key]!==false; }
+async function setItemVis(key,val){ CUR_CFG.category_vis=CUR_CFG.category_vis||{}; CUR_CFG.category_vis['__item__'+key]=(val==='visible');
+  try{ await api2('project-config',{method:'POST',body:{project:CUR_PID,category_vis:CUR_CFG.category_vis}}); }catch(e){ alert(e.message); }
+  const cat=LOOMIS.find(c=>c.id===CUR_CATID); if(cat) renderCategory(cat,CUR_INTERNAL); }
 const api2=async(p,o={})=>{const r=await fetch('/api/'+p,{credentials:'same-origin',headers:{'content-type':'application/json'},...o,body:o.body?JSON.stringify(o.body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d;};
 const DASH_CATS=()=>[{id:'plans',label:'Plans',plans:true}].concat(LOOMIS.map(c=>({id:c.id,label:c.label})));
 
@@ -1283,6 +1311,42 @@ async function showInternalProjects(){
 
 function catVisible(id){ const v=CUR_CFG&&CUR_CFG.category_vis; if(!v) return true; return v[id]!==false; }
 
+const FLOORVIEWS={
+  'loomis-isleworth':[{label:'1st Floor — Main',img:'/r7/floor-main.jpg'},{label:'2nd Floor — Upper',img:'/r7/floor-upper.jpg'}],
+  'diaz':[{label:'1st Floor',img:'/diaz-floor-1.jpg'},{label:'2nd Floor',img:'/diaz-floor-2.jpg'}]
+};
+function projectFloors(){
+  const cfgF=CUR_CFG&&CUR_CFG.category_vis&&CUR_CFG.category_vis.__floors__;
+  if(Array.isArray(cfgF)&&cfgF.length) return cfgF;
+  return FLOORVIEWS[CUR_PID]||[];
+}
+let FV={scale:1,x:0,y:0,px:0,py:0,down:false,sx:0,sy:0};
+function openFloorView(img,label){
+  let ov=document.getElementById('fvOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='fvOverlay'; ov.className='fv-ov';
+    ov.innerHTML=`<div class="fv-bar"><button class="fv-btn" onclick="fvZoom(-1)">&minus;</button>
+      <span class="fv-title" id="fvTitle"></span><button class="fv-btn" onclick="fvZoom(1)">+</button>
+      <button class="fv-btn" onclick="fvReset()">Fit</button><button class="fv-btn" onclick="closeFloorView()">&times; Close</button></div>
+      <div class="fv-stage" id="fvStage"><img id="fvImg" alt=""></div>
+      <div class="fv-hint">Scroll or +/&minus; to zoom · drag to pan · Esc to close</div>`;
+    document.body.appendChild(ov);
+    const stage=ov.querySelector('#fvStage');
+    stage.addEventListener('wheel',e=>{e.preventDefault();fvZoom(e.deltaY<0?1:-1,e);},{passive:false});
+    stage.addEventListener('mousedown',e=>{FV.down=true;FV.sx=e.clientX-FV.x;FV.sy=e.clientY-FV.y;stage.classList.add('drag');});
+    window.addEventListener('mousemove',e=>{if(!FV.down)return;FV.x=e.clientX-FV.sx;FV.y=e.clientY-FV.sy;fvApply();});
+    window.addEventListener('mouseup',()=>{FV.down=false;stage.classList.remove('drag');});
+    ov.addEventListener('click',e=>{if(e.target===ov)closeFloorView();});
+    window.addEventListener('keydown',e=>{if(e.key==='Escape')closeFloorView();});
+  }
+  document.getElementById('fvTitle').textContent=label||'Floor plan';
+  const im=document.getElementById('fvImg'); im.src=img;
+  ov.classList.add('on'); fvReset();
+}
+function fvApply(){ const im=document.getElementById('fvImg'); if(im) im.style.transform=`translate(calc(-50% + ${FV.x}px), calc(-50% + ${FV.y}px)) scale(${FV.scale})`; }
+function fvZoom(dir){ FV.scale=Math.max(1,Math.min(8,FV.scale*(dir>0?1.3:1/1.3))); if(FV.scale===1){FV.x=0;FV.y=0;} fvApply(); }
+function fvReset(){ FV.scale=1;FV.x=0;FV.y=0;fvApply(); }
+function closeFloorView(){ const ov=document.getElementById('fvOverlay'); if(ov)ov.classList.remove('on'); }
+
 async function openDashboard(pid, internal){
   CUR_PID=pid;
   showContentArea();
@@ -1295,6 +1359,7 @@ async function openDashboard(pid, internal){
 }
 
 function renderDashHome(internal){
+  CUR_INTERNAL=!!internal;
   showContentArea();
   const cats=DASH_CATS();
   const cover=(c)=>{ if(c.plans) return '/'+CUR_PID+'-plan-thumb.jpg'; const L=LOOMIS.find(x=>x.id===c.id); const it=L&&L.items&&L.items.find(i=>i.image); return it?it.image:''; };
@@ -1328,9 +1393,10 @@ async function setVisibility(catId,val){
 }
 
 function selectDashCat(catId, internal){
+  CUR_INTERNAL=!!internal;
   if(catId==='plans'){ renderPlans(internal); return; }
   const cat=LOOMIS.find(c=>c.id===catId); if(!cat) return;
-  renderCategory(cat);
+  renderCategory(cat,internal);
   const back=document.createElement('button'); back.className='back-link'; back.innerHTML='<span class="arrow">&larr;</span> Back to '+escapeHTML(CUR_NAME);
   back.onclick=()=>renderDashHome(internal);
   const c=document.getElementById('content'); c.insertBefore(back, c.firstChild);
@@ -1340,9 +1406,15 @@ function selectDashCat(catId, internal){
 function renderPlans(internal){
   const content=document.getElementById('content');
   const toolUrl='/isleworth?project='+encodeURIComponent(CUR_PID);
+  const floors=projectFloors();
+  const floorCards=floors.map(f=>`<button class="pcard" onclick="openFloorView('${escapeAttr(f.img)}','${escapeAttr(f.label)}')">
+      <div class="pcard-media"><img src="${escapeAttr(f.img)}" alt="${escapeAttr(f.label)}" onerror="this.style.opacity=.12"></div>
+      <div class="pcard-body"><div class="pcard-brand">Whole-floor RCP</div><div class="pcard-title">${escapeHTML(f.label)}</div>
+      <div class="pcard-meta"><span>Full plan — zoom &amp; pan</span><span class="go">View <span class="arrow">&rarr;</span></span></div></div></button>`).join('');
   content.innerHTML=`<button class="back-link" onclick="renderDashHome(${!!internal})"><span class="arrow">&larr;</span> Back to ${escapeHTML(CUR_NAME)}</button>
-    <div class="cat-head"><span class="eyebrow">${escapeHTML(CUR_NAME)}</span><h2>Plans</h2><p>Your reflected-ceiling / lighting plans and the room-by-room plan review.</p></div>
+    <div class="cat-head"><span class="eyebrow">${escapeHTML(CUR_NAME)}</span><h2>Plans</h2><p>Whole-floor reflected-ceiling plans and the room-by-room plan review.</p></div>
     <div class="cat-grid">
+      ${floorCards}
       <button class="pcard" onclick="location.href='${toolUrl}'"><div class="pcard-media"><img src="/${CUR_PID}-plan-thumb.jpg" alt="Plans" onerror="this.style.opacity=.12"></div>
         <div class="pcard-body"><div class="pcard-brand">Room-by-room</div><div class="pcard-title">Open plan review</div><div class="pcard-meta"><span>Rooms, crops &amp; fixture counts</span><span class="go">Open <span class="arrow">&rarr;</span></span></div></div></button>
       ${internal?`<div class="pcard pd-drop" id="plansDrop"><div class="pcard-media" style="display:flex;align-items:center;justify-content:center;flex-direction:column">
@@ -1394,6 +1466,7 @@ async function ingestPlans(file){
     for(const w of found){ const nm=w.replace(/\b\w/g,c=>c.toUpperCase()); if(have.has(nm.toLowerCase())) continue;
       try{ await api2('scope/room',{method:'POST',body:{project:CUR_PID,name:nm,floor:'Main'}}); created++; }catch(e){} }
     if(pageUrls[0]){ try{ await api2('scope/assign-drawing',{method:'POST',body:{project:CUR_PID,drawing_url:pageUrls[0],all:true}}); }catch(e){} }
+    try{ if(pageUrls.length){ CUR_CFG.category_vis=CUR_CFG.category_vis||{}; CUR_CFG.category_vis.__floors__=pageUrls.map((u,i)=>({label:'Floor '+(i+1),img:u})); await api2('project-config',{method:'POST',body:{project:CUR_PID,category_vis:CUR_CFG.category_vis}}); } }catch(e){}
   }catch(e){}
   set('Ingested '+nPages+' page(s), detected '+found.length+' room(s), created '+created+'. Open the room tool to tighten per-room crops (low-confidence rooms flagged there).');
 }
