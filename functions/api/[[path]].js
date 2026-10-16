@@ -1,13 +1,6 @@
 // Lookbook portal API — Cloudflare Pages Functions + D1
-// Routes: /api/login, /api/logout, /api/me, /api/set-password, /api/comments
-//
-// Auth model:
-// - First login uses last name + last-4-of-phone (the "PIN"), then the app forces the
-//   user to set a real password (min 8, upper, lower, number). Passwords are stored as
-//   PBKDF2-SHA256 hashes (never plaintext).
-// - Subsequent logins use last name + the new password.
-// - Roles: admin (all projects), sales (assigned), client (assigned + can comment/request).
-//   NOTE: still gate only non-sensitive project collaboration behind this.
+// Routes: /api/login, /api/logout, /api/me, /api/set-password, /api/comments,
+//         /api/project-config, /api/notes (+ scope viewer routes)
 
 const encoder = new TextEncoder();
 const COOKIE = "lb_session";
@@ -117,7 +110,7 @@ async function currentUser(context) {
   const uid = await verifyToken(secretOf(context.env), parseCookies(context.request)[COOKIE]);
   if (!uid || !context.env.DB) return null;
   const u = await context.env.DB
-    .prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password,active FROM users WHERE id=?")
+    .prepare("SELECT id,last_name,name,role,project_ids,password_hash,must_change_password,active,email FROM users WHERE id=?")
     .bind(uid).first();
   // Deactivated accounts (soft-disabled) can no longer use an existing cookie.
   if (u && u.active === 0) return null;
@@ -130,15 +123,11 @@ function clearCookieHeader() {
   return `${COOKIE}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
-// Shared team-auth gate for cross-app (CRM) endpoints. Compares the caller's
-// "x-team-auth" header against env.TEAM_AUTH_KEY in constant time (via HMAC so
-// differing lengths don't leak). Returns { configured, ok }:
-//   configured=false → no TEAM_AUTH_KEY set on this project.
-//   ok=true → header matches the secret.
+// Shared team-auth gate for cross-app (CRM) endpoints.
 async function teamAuth(request, env) {
   if (!env.TEAM_AUTH_KEY) return { configured: false, ok: false };
   const provided = request.headers.get("x-team-auth") || "";
-  if (!provided) return { configured: true, ok: false }; // missing header → clean reject (no HMAC on empty key)
+  if (!provided) return { configured: true, ok: false };
   const ok = timingSafeEqualHex(
     await hmacHex(env.TEAM_AUTH_KEY, "k"),
     await hmacHex(provided, "k")
@@ -146,7 +135,7 @@ async function teamAuth(request, env) {
   return { configured: true, ok };
 }
 
-// ---- Lookbook system categories (authoritative list; CRM reads via /api/categories) ----
+// ---- Lookbook system categories ----
 const LOOKBOOK_CATEGORIES = [
   {id:"lighting",label:"Lighting"},
   {id:"shades",label:"Window Treatments"},
@@ -169,12 +158,6 @@ async function ensureProjectsTable(env){
     systems TEXT, items TEXT, photos TEXT, created_at TEXT, updated_at TEXT
   )`).run();
 }
-// ---- Scope viewer (room-by-room proposal) persistence ----
-// A scope project (e.g. Loomis Isleworth) has rooms; each room = one drawing +
-// free-text scope + an array of pinned call-outs {label,measurement,products,x,y}.
-// Call-outs are stored as a JSON blob on the room row (whole-room save keeps the
-// collaborative read/write simple: GET the project, PUT a room).
-// The real Loomis Isleworth room list, grouped by floor (Main / Upper / Exterior).
 const LOOMIS_FLOORS = [
   { floor: "Main", rooms: ["Entry & Vestibule","Foyer","Dining Room","Living Room","West Gallery","East Gallery","Kitchen","Breakfast","Family Room","Pantry","Tasting Room","Wine Room","Powder Room","Mud Room","Laundry","Chat Room","Bedroom 2","Bath 2","Master Bedroom","Master Bath","Master Water Closet","Her Closet","His Closet","Dressing","His Sauna","Fitness Room","Garage & Garage Bath","Elevator"] },
   { floor: "Upper", rooms: ["Bridge","Loft","Recreation Room","Snack Bar","Rec Powder Room","Theater","VIP Suite","VIP Bath & Closet","Bedroom 4","Bath 4 & Closet","Bedroom 5","Bath 5 & Closet","East Hall","Upstairs Laundry","Storage / Equipment 1 & 2"] },
@@ -185,31 +168,30 @@ async function ensureScopeTables(env){
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_projects (
     id TEXT PRIMARY KEY, name TEXT, created_at TEXT, updated_at TEXT
   )`).run();
+  // Newer per-project config columns (ignore if they already exist).
+  try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN owner_email TEXT").run(); } catch(e){}
+  try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN category_vis TEXT").run(); } catch(e){}
+  try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN client_last_name TEXT").run(); } catch(e){}
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_rooms (
     id TEXT PRIMARY KEY, project_id TEXT, name TEXT, floor TEXT, drawing_url TEXT,
     scope_text TEXT, callouts TEXT, line_items TEXT, sort INTEGER DEFAULT 0,
     updated_at TEXT, updated_by TEXT
   )`).run();
-  // Add newer columns on pre-existing DBs (ignore if they already exist).
   try { await env.DB.prepare("ALTER TABLE scope_rooms ADD COLUMN floor TEXT").run(); } catch(e){}
   try { await env.DB.prepare("ALTER TABLE scope_rooms ADD COLUMN line_items TEXT").run(); } catch(e){}
-  // Small key/value table for one-time scope migrations.
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_meta (key TEXT PRIMARY KEY, value TEXT)`).run();
-  // Rendered plan pages (from a dropped RCP PDF). Stored as a downscaled JPEG BLOB in D1
-  // (no R2 binding exists yet). One row per page; rooms reference /api/scope/plan/<id>,
-  // so a floor image is stored once and shared across all its rooms (no duplication).
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_plans (
     id TEXT PRIMARY KEY, project_id TEXT, label TEXT, page_no INTEGER,
     mime TEXT, img BLOB, created_at TEXT, created_by TEXT
   )`).run();
   const now = new Date().toISOString();
-  // Ensure the project row exists.
   const proj = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
   if (!proj) {
     await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)")
       .bind("loomis-isleworth","Loomis Isleworth",now,now).run();
   }
-  // One-time seed of the real 49-room list (replaces the earlier placeholder rooms).
+  // Default the project owner email where unset (editable per project afterwards).
+  try { await env.DB.prepare("UPDATE scope_projects SET owner_email=? WHERE owner_email IS NULL OR owner_email=''").bind("corban@betterlivingsystems.com").run(); } catch(e){}
   const flag = await env.DB.prepare("SELECT value FROM scope_meta WHERE key=?").bind("isleworth_rooms_v2").first();
   if (!flag) {
     await env.DB.prepare("DELETE FROM scope_rooms WHERE project_id=?").bind("loomis-isleworth").run();
@@ -229,7 +211,6 @@ function rowToScopeRoom(r){
     scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), line_items:safeJSON(r.line_items,[]), sort:r.sort||0,
     updated_at:r.updated_at, updated_by:r.updated_by||null };
 }
-// Editing the scope is for working staff (admin/sales); clients are view-only.
 function canEditScope(user){ return !!user && (user.role === "admin" || user.role === "sales"); }
 async function makeInviteToken(secret, userId, ttlMs){
   const exp = Date.now() + (ttlMs || 7*24*60*60*1000);
@@ -248,7 +229,6 @@ async function verifyInviteToken(secret, token){
 async function ensureUsersColumns(env){
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN email TEXT").run(); } catch(e){}
   try { await env.DB.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)").run(); } catch(e){}
-  // Soft-deactivation flag (default active). Lets the CRM disable a login (e.g. clean up test invites).
   try { await env.DB.prepare("ALTER TABLE users ADD COLUMN active INTEGER DEFAULT 1").run(); } catch(e){}
 }
 function rowToProject(r){
@@ -269,12 +249,12 @@ export async function onRequest(context) {
 
   try {
     await ensureUsersColumns(env);
-    // ---- LOGIN (last name + password; password = last-4 PIN on first login) ----
+    // ---- LOGIN ----
     if (route === "login" && method === "POST") {
       const body = await request.json().catch(() => ({}));
       const lastName = (body.lastName || "").toString().trim();
       const password = (body.password || "").toString();
-      if (!lastName || !password) return json({ error: "Enter your last name and password." }, 400);
+      if (!lastName || !password) return json({ error: "Enter your last name and PIN." }, 400);
 
       const user = await env.DB
         .prepare("SELECT id,last_name,last4,role,name,project_ids,password_hash,must_change_password,email,active FROM users WHERE lower(last_name)=lower(?) OR lower(email)=lower(?)")
@@ -285,14 +265,14 @@ export async function onRequest(context) {
       const firstTime = user.must_change_password || !user.password_hash;
       let ok = false;
       if (firstTime) {
-        ok = password === String(user.last4); // first-time credential
+        ok = password === String(user.last4);
       } else {
         ok = await verifyPassword(password, user.password_hash);
       }
       if (!ok) {
         return json({ error: firstTime
-          ? "Not recognized. First-time sign-in uses the last 4 digits of your phone."
-          : "Incorrect password." }, 401);
+          ? "Not recognized. First-time sign-in uses your PIN (last 4 digits of your phone)."
+          : "Incorrect PIN." }, 401);
       }
       const token = await makeToken(secretOf(env), user.id);
       return json({ ok: true, mustChange: !!firstTime, user: publicUser(user) }, 200, {
@@ -301,18 +281,11 @@ export async function onRequest(context) {
     }
 
     // ---- SET / CHANGE PASSWORD ----
-    // Two modes on the same URL:
-    //   A) TEAM WRITE (cross-app, e.g. the bls-sales CRM): body includes "lastName".
-    //      Requires the x-team-auth shared-secret gate. Writes to that user's
-    //      password_hash so a change made on either app stays in sync. Sets no cookie.
-    //   B) SELF-SERVICE (the lookbook's own forced-password-change): body has only
-    //      "newPassword"; the signed-in user (cookie) is the target.
     if (route === "set-password" && method === "POST") {
       const body = await request.json().catch(() => ({}));
       const newPassword = (body.newPassword || "").toString();
       const teamLastName = (body.lastName || "").toString().trim();
 
-      // --- Mode A: team write (identified by a lastName in the body) ---
       if (teamLastName) {
         const gate = await teamAuth(request, env);
         if (!gate.configured) return json({ ok: false, error: "Team auth not configured on this project." }, 403);
@@ -330,7 +303,6 @@ export async function onRequest(context) {
         return json({ ok: true });
       }
 
-      // --- Mode B: self-service (must be signed in) ---
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in first." }, 401);
       const issue = passwordIssue(newPassword);
@@ -355,12 +327,7 @@ export async function onRequest(context) {
       return json({ user: user ? publicUser(user) : null });
     }
 
-    // ---- VALIDATE (shared team-auth for other apps, e.g. the bls-sales CRM) ----
-    // Stateless credential check against the SAME users table. Sets no cookie.
-    // Intended for server-to-server calls (the CRM Worker) or a same-account Worker
-    // that binds this D1 directly. If env.TEAM_AUTH_KEY is set, require a matching
-    // "x-team-auth" header so the endpoint isn't openly callable; if unset, it behaves
-    // like /api/login (same exposure). Non-destructive: does not modify any row.
+    // ---- VALIDATE ----
     if (route === "validate" && method === "POST") {
       const gate = await teamAuth(request, env);
       if (gate.configured && !gate.ok) return json({ valid: false, error: "Unauthorized caller." }, 401);
@@ -409,12 +376,91 @@ export async function onRequest(context) {
       }
     }
 
-    // ---- CATEGORIES (public: authoritative system list for the CRM checkboxes) ----
+    // ---- CATEGORIES ----
     if (route === "categories" && method === "GET") {
       return json({ categories: LOOKBOOK_CATEGORIES });
     }
 
-    // ---- PROJECTS (DB-backed; consolidated by normalized address) ----
+    // ---- PROJECT CONFIG (owner email + per-category visibility) ----
+    // GET: any signed-in user (clients read their visibility). POST: team only.
+    if (route === "project-config" && method === "GET") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const pid = (url.searchParams.get("project") || "").trim();
+      if (!pid) return json({ error: "project required." }, 400);
+      const proj = await env.DB.prepare("SELECT id,name,owner_email,category_vis,client_last_name FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!proj) return json({ error: "No such project." }, 404);
+      return json({
+        id: proj.id, name: proj.name,
+        owner_email: proj.owner_email || null,
+        category_vis: safeJSON(proj.category_vis, null),
+        client_last_name: proj.client_last_name || null,
+        can_edit: canEditScope(user),
+      });
+    }
+    if (route === "project-config" && method === "POST") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only — team members only." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const pid = (b.project || "").toString().trim();
+      if (!pid) return json({ error: "project required." }, 400);
+      const exists = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!exists) return json({ error: "No such project." }, 404);
+      const sets = [], binds = [];
+      if (b.owner_email !== undefined) { sets.push("owner_email=?"); binds.push(String(b.owner_email || "").slice(0, 200)); }
+      if (b.category_vis !== undefined) { sets.push("category_vis=?"); binds.push(JSON.stringify(b.category_vis || {})); }
+      if (b.client_last_name !== undefined) { sets.push("client_last_name=?"); binds.push(String(b.client_last_name || "").slice(0, 120)); }
+      if (b.name !== undefined) { sets.push("name=?"); binds.push(String(b.name).slice(0, 160)); }
+      if (!sets.length) return json({ error: "Nothing to update." }, 400);
+      sets.push("updated_at=?"); binds.push(new Date().toISOString());
+      binds.push(pid);
+      await env.DB.prepare("UPDATE scope_projects SET " + sets.join(", ") + " WHERE id=?").bind(...binds).run();
+      return json({ ok: true });
+    }
+
+    // ---- NOTES / QUESTIONS: client submits → email the project owner (Resend) ----
+    if (route === "notes" && method === "POST") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const b = await request.json().catch(() => ({}));
+      const pid = (b.project || "").toString().trim();
+      const message = (b.message || "").toString().trim().slice(0, 4000);
+      if (!pid || !message) return json({ error: "Project and message are required." }, 400);
+      const proj = await env.DB.prepare("SELECT id,name,owner_email FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!proj) return json({ error: "No such project." }, 404);
+      const to = proj.owner_email || "corban@betterlivingsystems.com";
+      const from = env.NOTES_FROM || "Better Living Systems <noreply@salesbetterliving.com>";
+      const author = user.name || user.last_name || "A client";
+      const subject = `New note on ${proj.name} — from ${author}`;
+      const textBody = `${author} left a note / question on the ${proj.name} lookbook:\n\n${message}\n\n— Sent from the Better Living Systems lookbook`;
+      // Persist in the comments thread as type "note".
+      try {
+        await env.DB.prepare("INSERT INTO comments (project_id,author_name,role,type,text,created_at) VALUES (?,?,?,?,?,?)")
+          .bind(pid, author, user.role, "note", message, new Date().toISOString()).run();
+      } catch (e) {}
+      if (!env.RESEND_API_KEY) {
+        return json({ ok: true, emailed: false, note: "Saved. Email not sent — RESEND_API_KEY is not set on this Pages project." });
+      }
+      try {
+        const payload = { from, to: [to], subject, text: textBody };
+        if (user.email) payload.reply_to = user.email;
+        const r = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: { "authorization": "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const ok = r.ok;
+        return json({ ok: true, emailed: ok, to: ok ? to : undefined, error: ok ? undefined : ("Email send failed (" + r.status + ")") });
+      } catch (e) {
+        return json({ ok: true, emailed: false, error: String((e && e.message) || e) });
+      }
+    }
+
+    // ---- PROJECTS (CRM, DB-backed) ----
     if (route === "projects") {
       await ensureProjectsTable(env);
       if (method === "GET") {
@@ -452,7 +498,6 @@ export async function onRequest(context) {
           return json({ ok: true, project_id: existing.id, removed: true });
         }
 
-        // upsert (create or append this lead's systems)
         if (existing) {
           let items = safeJSON(existing.items, []);
           const idx = items.findIndex((it) => String(it.lead_id) === leadId);
@@ -471,7 +516,7 @@ export async function onRequest(context) {
       }
     }
 
-    // ---- CREATE USER (team-auth): provision a user for an emailed invite ----
+    // ---- CREATE USER (team-auth) ----
     if (route === "users" && method === "POST") {
       const gate = await teamAuth(request, env);
       if (gate.configured && !gate.ok) return json({ error: "Unauthorized caller." }, 401);
@@ -496,10 +541,7 @@ export async function onRequest(context) {
       return json({ ok: true, user_id: uid, role, token, accept_url });
     }
 
-    // ---- DEACTIVATE / REACTIVATE USER (team-auth): soft-disable a login ----
-    // Used by the CRM admin Users list (e.g. to clean up test invites). Sets the
-    // users.active flag; deactivated users can no longer log in or use a cookie.
-    // Body: { user_id } | { email } | { last_name }, optional { action: "reactivate" }.
+    // ---- DEACTIVATE / REACTIVATE USER (team-auth) ----
     if (route === "users/deactivate" && method === "POST") {
       const gate = await teamAuth(request, env);
       if (!gate.configured) return json({ ok: false, error: "Team auth not configured on this project." }, 403);
@@ -519,7 +561,7 @@ export async function onRequest(context) {
       return json({ ok: true, user_id: user.id, active });
     }
 
-    // ---- ACCEPT INVITE (public; signed-token gated): set password from the emailed link ----
+    // ---- ACCEPT INVITE ----
     if (route === "accept-invite" && method === "POST") {
       const b = await request.json().catch(() => ({}));
       const token = (b.token || "").toString();
@@ -537,8 +579,7 @@ export async function onRequest(context) {
       return json({ ok: true, user: publicUser(user) }, 200, { "set-cookie": cookieHeader(stoken) });
     }
 
-    // ================= SCOPE VIEWER (room-by-room proposal) =================
-    // Read a scope project (rooms + scope + call-outs). Any signed-in user.
+    // ================= SCOPE VIEWER =================
     if (route === "scope" && method === "GET") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -546,7 +587,6 @@ export async function onRequest(context) {
       const pid = (url.searchParams.get("project") || "loomis-isleworth").trim();
       let proj = await env.DB.prepare("SELECT * FROM scope_projects WHERE id=?").bind(pid).first();
       if (!proj) {
-        // Reusable per-project tool: first visit lazily creates an empty scope workspace.
         if (!canEditScope(user)) return json({ error: "No scope workspace for this project yet." }, 404);
         const nm = (url.searchParams.get("name") || pid).toString().slice(0,160);
         const now0 = new Date().toISOString();
@@ -555,12 +595,11 @@ export async function onRequest(context) {
       }
       const { results } = await env.DB.prepare("SELECT * FROM scope_rooms WHERE project_id=? ORDER BY sort ASC, name ASC").bind(pid).all();
       return json({
-        project: { id: proj.id, name: proj.name },
+        project: { id: proj.id, name: proj.name, owner_email: proj.owner_email || null, category_vis: safeJSON(proj.category_vis, null) },
         can_edit: canEditScope(user),
         rooms: (results || []).map(rowToScopeRoom)
       });
     }
-    // Create a room. Team only.
     if (route === "scope/room" && method === "POST") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -575,7 +614,6 @@ export async function onRequest(context) {
         .bind(id, pid, (b.name||"New Room").toString().slice(0,120), (b.floor||null), null, "", "[]", "[]", (cnt&&cnt.n)||0, now, user.name||user.last_name).run();
       return json({ ok: true, id });
     }
-    // Update a room (name / drawing_url / scope_text / callouts). Team only.
     if (route === "scope/room" && method === "PUT") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -598,7 +636,6 @@ export async function onRequest(context) {
           b.sort!=null?Number(b.sort):null, now, user.name||user.last_name, id).run();
       return json({ ok: true, updated_at: now, updated_by: user.name||user.last_name });
     }
-    // Delete a room. Team only.
     if (route === "scope/room" && method === "DELETE") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -610,15 +647,13 @@ export async function onRequest(context) {
       return json({ ok: true });
     }
 
-    // List all scope projects (for the project switcher). Any signed-in user.
     if (route === "scope/projects" && method === "GET") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in." }, 401);
-      const { results } = await env.DB.prepare("SELECT id,name,updated_at FROM scope_projects ORDER BY name ASC").all();
+      const { results } = await env.DB.prepare("SELECT id,name,updated_at,owner_email FROM scope_projects ORDER BY name ASC").all();
       return json({ projects: results || [], can_edit: canEditScope(user) });
     }
-    // Create a new scope project (reusable tool). Team only.
     if (route === "scope/project" && method === "POST") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -631,12 +666,14 @@ export async function onRequest(context) {
       const dup = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind(id).first();
       if (dup) id = id + "-" + Date.now().toString(36);
       const now = new Date().toISOString();
-      await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)").bind(id, name, now, now).run();
+      const ownerEmail = (b.owner_email || "corban@betterlivingsystems.com").toString().slice(0,200);
+      const catVis = b.category_vis !== undefined ? JSON.stringify(b.category_vis) : null;
+      const clientLast = (b.client_last_name || "").toString().slice(0,120) || null;
+      await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at,owner_email,category_vis,client_last_name) VALUES (?,?,?,?,?,?,?)").bind(id, name, now, now, ownerEmail, catVis, clientLast).run();
       return json({ ok: true, id, name });
     }
 
-    // ---- Scope plans (rendered RCP pages) ----
-    // Serve a stored plan page image (used as a room's drawing_url). Signed-in users.
+    // ---- Scope plans ----
     if (route.startsWith("scope/plan/") && method === "GET") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -647,7 +684,6 @@ export async function onRequest(context) {
       const bytes = (row.img instanceof ArrayBuffer) ? new Uint8Array(row.img) : row.img;
       return new Response(bytes, { headers: { "content-type": row.mime || "image/jpeg", "cache-control": "public, max-age=31536000" } });
     }
-    // List plan pages for a project (metadata only, no image bytes). Signed-in users.
     if (route === "scope/plans" && method === "GET") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -656,7 +692,6 @@ export async function onRequest(context) {
       const { results } = await env.DB.prepare("SELECT id, label, page_no FROM scope_plans WHERE project_id=? ORDER BY page_no ASC, created_at ASC").bind(pid).all();
       return json({ plans: (results||[]).map(r => ({ id:r.id, label:r.label, page_no:r.page_no, url:`/api/scope/plan/${r.id}` })) });
     }
-    // Save a rendered plan page (downscaled JPEG data URL). Team only.
     if (route === "scope/plan" && method === "POST") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -676,7 +711,6 @@ export async function onRequest(context) {
         .bind(id, pid, (b.label||"Plan page").toString().slice(0,120), Number(b.page_no)||0, mime, bin, now, user.name||user.last_name).run();
       return json({ ok: true, id, url: `/api/scope/plan/${id}` });
     }
-    // Bulk-assign a drawing URL to rooms (by explicit ids or by floor). Team only.
     if (route === "scope/assign-drawing" && method === "POST") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
