@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Project Scope by Room · Better Living Systems</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{--bg:#f5f2eb;--card:#fff;--line:#e2ddd2;--line2:#d3cdbf;--ink:#1c1b19;--ink2:#4a4741;--muted:#8a857b;
+    --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:Inter,-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    --green:#2f7d4a;--green-bg:#e6f3ea;--amber:#9a6a00;--amber-bg:#fdf1d6;}
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.45}
+  a{color:inherit}
+  button,input,select,textarea{font-family:inherit;font-size:inherit}
+  .mono{font-family:var(--mono)}
+  .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+  .wrap{max-width:1260px;margin:0 auto;padding:22px 24px 80px}
+  .topnav{display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .topnav a{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);text-decoration:none;border:1px solid var(--line2);border-radius:6px;padding:6px 10px;background:var(--card)}
+  .topnav a:hover{border-color:var(--ink)}
+  .topnav .sp{margin-left:auto}
+  .save{font-family:var(--mono);font-size:11px;color:var(--muted)} .save.ok{color:var(--green)} .save.err{color:#b23b2a}
+  .role{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);border-radius:999px;padding:3px 9px;color:var(--ink2)}
+  header h1{font-size:40px;line-height:1.08;font-weight:800;letter-spacing:-.02em;margin:8px 0 12px}
+  header .intro{max-width:860px;color:var(--ink2);font-size:15px;line-height:1.6;margin:0 0 14px}
+  .stats{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);margin:0 0 14px}
+  .rule{border:0;border-top:3px solid var(--ink);margin:0 0 14px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-bottom:26px;font-size:12.5px;color:var(--ink2)}
+  .legend span.it{display:inline-flex;align-items:center;gap:7px}
+  .badge{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:4px;border:1px solid transparent;line-height:1.35;white-space:nowrap}
+  .b-RCP{border-color:var(--ink);color:var(--ink);background:#fff}
+  .b-PH1{background:#f3e3a9;color:#5c4a0c;border-color:#e3cd7d}
+  .b-DFO,.b-EST,.b-other{background:#f1efea;color:#77736a;border-color:#e6e2d9}
+  .b-ADDED{background:var(--green-bg);color:var(--green);border-color:#b9dcc4}
+  .b-EDITED{background:var(--amber-bg);color:var(--amber);border-color:#efd391}
+  .edit-link{font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:none;border:0;cursor:pointer;padding:2px 4px;text-decoration:underline;text-underline-offset:2px}
+  .edit-link:hover{color:var(--ink)}
+  .layout{display:grid;grid-template-columns:262px 1fr;gap:26px;align-items:start}
+  aside{position:sticky;top:16px;max-height:calc(100vh - 32px);overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+  aside input.search{width:100%;border:1px solid var(--line2);border-radius:7px;padding:8px 10px;background:#fff;outline:none}
+  aside input.search:focus{border-color:var(--ink)}
+  .pills{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 6px}
+  .pill{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;border:1px solid var(--line2);background:#fff;color:var(--ink2);border-radius:999px;padding:4px 10px;cursor:pointer}
+  .pill.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  .grp{margin-top:14px}
+  .grp .lbl{display:block;margin-bottom:4px}
+  .rlink{display:flex;justify-content:space-between;gap:8px;width:100%;text-align:left;background:none;border:0;border-radius:6px;padding:5px 7px;cursor:pointer;color:var(--ink);font-size:13px}
+  .rlink:hover{background:#f3f0e8}
+  .rlink .n{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  .add-room{margin-top:14px;width:100%;border:1px dashed var(--green);color:var(--green);background:var(--green-bg);border-radius:7px;padding:7px;cursor:pointer;font-weight:600}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:16px;scroll-margin-top:16px}
+  .card-h{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+  .card-h h3{margin:0;font-size:17px;font-weight:700}
+  .note{margin:8px 0 2px;color:var(--ink2);font-size:13px;background:#faf8f3;border-left:3px solid var(--line2);padding:6px 10px;border-radius:0 6px 6px 0;white-space:pre-wrap}
+  .note-row{display:flex;gap:8px;align-items:flex-start}
+  table{width:100%;border-collapse:collapse;margin-top:10px}
+  th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line)}
+  td{padding:7px 8px;border-bottom:1px solid #efebe3;vertical-align:middle}
+  tr:last-child td{border-bottom:0}
+  td.cat{color:var(--ink2);width:22%}
+  td.qty,th.qty{text-align:right;font-family:var(--mono);white-space:nowrap;width:110px}
+  td.src,th.src{width:96px}
+  td.act{width:56px;text-align:right}
+  tr.editing td{background:#fbfaf6}
+  .f{border:1px solid var(--line2);border-radius:6px;padding:5px 7px;background:#fff;width:100%;outline:none}
+  .f:focus{border-color:var(--ink)}
+  .f.qn{width:70px;text-align:right;font-family:var(--mono)}
+  .f.un{width:auto;font-family:var(--mono)}
+  .qtyedit{display:flex;gap:5px;justify-content:flex-end}
+  .btns{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+  .btn{border:1px solid var(--ink);background:var(--ink);color:#fff;border-radius:6px;padding:5px 10px;cursor:pointer;font-size:12.5px;font-weight:600}
+  .btn.ghost{background:#fff;color:var(--ink)}
+  .btn.danger{background:#fff;color:#b23b2a;border-color:#e3b3aa}
+  .add-line{margin-top:10px;width:100%;border:1.5px dashed #7fb894;color:var(--green);background:#f7fbf8;border-radius:8px;padding:8px;cursor:pointer;font-weight:600;font-size:13px}
+  .add-line:hover{background:var(--green-bg)}
+  .empty{background:var(--card);border:1px dashed var(--line2);border-radius:10px;padding:34px;text-align:center;color:var(--ink2)}
+  .empty h3{margin:0 0 6px;font-size:18px}
+  .nolines{color:var(--muted);font-size:13px;padding:10px 0 2px}
+  .footer-note{margin-top:22px;color:var(--ink2);font-size:13px;line-height:1.6;border-top:1px solid var(--line2);padding-top:14px;white-space:pre-wrap}
+  .orig{font-size:11px;color:var(--muted);margin-top:2px}
+  .gate{max-width:440px;margin:14vh auto;text-align:center;padding:30px;background:var(--card);border:1px solid var(--line);border-radius:12px}
+  .gate h2{margin:0 0 8px}
+  .modal-bg{position:fixed;inset:0;background:rgba(28,27,25,.35);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal-bg.on{display:flex}
+  .modal{background:#fff;border-radius:12px;border:1px solid var(--line);padding:18px;width:min(92vw,520px)}
+  .modal h4{margin:0 0 10px;font-size:16px}
+  .modal label{display:block;margin:10px 0 4px}
+  .modal textarea{min-height:110px;resize:vertical}
+  @media(max-width:860px){.layout{grid-template-columns:1fr}aside{position:static;max-height:none}header h1{font-size:30px}}
+</style></head>
+<body>
+<div id="gate" class="gate" style="display:none">
+  <h2 id="gateTitle">Please sign in</h2>
+  <p id="gateMsg" style="color:var(--ink2)">Sign in on the Lookbook to open this project's scope.</p>
+  <p><a class="btn" href="/" style="text-decoration:none;display:inline-block">Go to the Lookbook →</a></p>
+</div>
+<div id="app" class="wrap" style="display:none">
+  <div class="topnav">
+    <a href="/" id="backLink">← Lookbook</a>
+    <span class="sp"></span>
+    <span class="save" id="saveState"></span>
+    <span class="role" id="rolePill"></span>
+  </div>
+  <header>
+    <div class="lbl" id="eyebrow"></div>
+    <h1>Project Scope by Room</h1>
+    <p class="intro">Every space in the house with the lighting, shading and controls currently in scope. Pick a room and add anything that came up in conversations — use "edit" on any line to change the callout (for example, add "or comparable"). Additions and edits save here for the whole team and roll into the next proposal revision.</p>
+    <div class="stats" id="stats"></div>
+    <hr class="rule">
+    <div class="legend" id="legend"></div>
+  </header>
+  <div class="layout">
+    <aside id="side">
+      <input class="search" id="search" placeholder="Find a room…" autocomplete="off">
+      <div class="pills" id="pills"></div>
+      <div id="roomNav"></div>
+      <button class="add-room" id="sideAddRoom" style="display:none">+ Add room</button>
+    </aside>
+    <main>
+      <div id="cards"></div>
+      <div class="footer-note" id="footer"></div>
+    </main>
+  </div>
+</div>
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+
+<script>
+/* Project Scope by Room — generic per project (?project=<scope project id>).
+   Data: scope_rooms.line_items (JSON) + scope_rooms.scope_text (room note), via
+   GET /api/scope/by-room and PUT /api/scope/by-room/room (narrow update). */
+const PID=(new URLSearchParams(location.search).get('project')||'').trim();
+const FLOORS=['Main','Upper','Exterior'];
+const FLOOR_LABEL={Main:'Main Floor',Upper:'Upper Floor',Exterior:'Exterior'};
+const CATEGORIES=['Recessed','Accent / adjustable','Cove/coffer','Decorative (by others)','Window treatment','Drape pocket (G2)','Keypad','Cabinetry LED','Fan','Wet location','Sensor','Exterior downlight','Audio/Video','Control','Other'];
+const UNITS=['ea','LF','openings'];
+const BASE_SOURCES=['RCP','PH1','DFO','EST'];
+const LEGEND=[['RCP',"architect's noted ceiling plan"],['PH1','Phase 1 cabinetry'],['DFO','window treatment vendor list'],['EST','BLS estimate'],['ADDED','added by the team'],['EDITED','changed by the team']];
+// Artifact-only text for Loomis Isleworth, shown when the DB has nothing of its own.
+const LOOMIS_NOTES={
+  'room-main-his-sauna':'Sauna fixture must be rated for the heat; confirm with the sauna supplier.',
+  'room-upper-theater':'Step / aisle lighting not yet on the RCP – confirm with the theater layout.',
+  'room-exterior-outdoor-living-and-pool-deck':'RCP calls out "LED LT." at the outdoor living beams – length not dimensioned; add footage here.',
+  'room-exterior-zen-garden-and-service-yard':'Landscape lighting excluded – quoted separately.'
+};
+const LOOMIS_FOOTER='Quantities are estimates allocated room by room from the R5 noted RCPs, Artistry\'s cabinet list and DFO\'s window treatment list; verify against RCP R7 before ordering. Decorative fixtures (chandeliers, pendants, sconces, track) are supplied by the design team and controlled by HomeWorks. Coves are Lutron Lumaris tunable white; drape pockets are Ketra G2 (12" fixtures).';
+const GENERIC_FOOTER='Quantities are estimates allocated room by room from the plans and conversations to date; verify against the latest RCP before ordering. Decorative fixtures are supplied by others unless noted.';
+
+let DATA=null, ME=null, floorFilter='All', query='', editing=null; // editing = {roomId, idx|'new'}
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function token(){ try{ return localStorage.getItem('lb_token')||''; }catch(e){ return ''; } }
+async function api(path,opts={}){
+  const h={'content-type':'application/json'}; const t=token(); if(t) h.authorization='Bearer '+t;
+  const r=await fetch('/api/'+path,{credentials:'include',...opts,headers:h,body:opts.body?JSON.stringify(opts.body):undefined});
+  const d=await r.json().catch(()=>({})); if(!r.ok){ const e=new Error(d.error||('Request failed ('+r.status+')')); e.status=r.status; e.data=d; throw e; } return d;
+}
+function setSave(cls,txt){ const el=document.getElementById('saveState'); el.className='save '+cls; el.textContent=txt; if(cls==='ok') setTimeout(()=>{ if(el.textContent===txt) el.textContent=''; },1800); }
+function gate(title,msg){ document.getElementById('app').style.display='none'; const g=document.getElementById('gate'); g.style.display='block';
+  if(title) document.getElementById('gateTitle').textContent=title; if(msg) document.getElementById('gateMsg').textContent=msg; }
+
+(async function boot(){
+  try{ ME=(await api('me')).user; }catch(e){}
+  if(!ME){ gate(); return; }
+  if(!PID){ gate('No project selected','Open a project from the Lookbook and choose "Project Scope by Room".'); return; }
+  try{ DATA=await api('scope/by-room?project='+encodeURIComponent(PID)); }
+  catch(e){ gate('Scope not available', e.message); return; }
+  document.getElementById('app').style.display='block';
+  document.title=(DATA.project.name||PID)+' — Project Scope by Room · Better Living Systems';
+  document.getElementById('rolePill').textContent=DATA.can_edit?('Editing as '+(ME.name||'team')):'View only';
+  document.getElementById('search').oninput=e=>{ query=e.target.value.trim().toLowerCase(); renderRooms(); };
+  const sa=document.getElementById('sideAddRoom'); if(DATA.can_edit){ sa.style.display=''; sa.onclick=()=>openAddRoom(); }
+  renderAll();
+})();
+
+/* ---------- header ---------- */
+function clientWord(){ const p=DATA.project; if(p.client_last_name) return p.client_last_name;
+  return String(p.name||PID).replace(/\bresidence\b/i,'').trim().split(/\s+/)[0]||PID; }
+function locationWord(){ const p=DATA.project; if(p.location!=null&&p.location!=='') return p.location;
+  const c=clientWord().toLowerCase(); const rest=String(p.name||'').replace(/\bresidence\b/i,'').trim().split(/\s+/).filter((w,i)=>!(i===0&&w.toLowerCase()===c)).join(' ');
+  return rest; }
+function renderHeader(){
+  const parts=['Better Living Systems', clientWord()+' Residence']; const loc=locationWord(); if(loc) parts.push(loc);
+  document.getElementById('eyebrow').innerHTML=esc(parts.join(' · '))+(DATA.can_edit?' <button class="edit-link" id="editHeader">edit</button>':'');
+  const eh=document.getElementById('editHeader'); if(eh) eh.onclick=openEditProject;
+  document.getElementById('legend').innerHTML=LEGEND.map(([k,v])=>`<span class="it">${badge(k)} ${esc(v)}</span>`).join('');
+}
+function badge(src){ const s=String(src||'').toUpperCase(); const cls=['RCP','PH1','DFO','EST','ADDED','EDITED'].includes(s)?s:'other'; return `<span class="badge b-${cls}">${esc(s||'—')}</span>`; }
+function allLines(){ const out=[]; DATA.rooms.forEach(r=>(r.line_items||[]).forEach(li=>out.push(li))); return out; }
+function sum(pred){ return allLines().reduce((n,li)=>n+(pred(li)?(Number(li.qty)||0):0),0); }
+function count(pred){ return allLines().filter(pred).length; }
+function renderStats(){
+  const unit=li=>String(li.unit||'ea'); const n=v=>Number(v).toLocaleString();
+  const parts=[`${n(DATA.rooms.length)} spaces`,
+    `${n(sum(li=>li.category==='Recessed'))} recessed`,
+    `${n(sum(li=>li.category==='Cove/coffer'&&unit(li)==='LF'))} LF cove`,
+    `${n(sum(li=>li.category==='Cabinetry LED'&&unit(li)==='LF'))} LF cabinetry`,
+    `${n(sum(li=>li.category==='Drape pocket (G2)'))} G2`,
+    `${n(sum(li=>li.category==='Keypad'))} keypads`];
+  const av=sum(li=>li.category==='Audio/Video'); if(av) parts.push(`${n(av)} A/V`);
+  const ctl=sum(li=>li.category==='Control'); if(ctl) parts.push(`${n(ctl)} control`);
+  parts.push(`${n(count(li=>li.source==='ADDED'))} added`, `${n(count(li=>li.source==='EDITED'))} edited`);
+  document.getElementById('stats').textContent=parts.join(' · ');
+}
+function renderFooter(){
+  const f=DATA.project.footer||(PID==='loomis-isleworth'?LOOMIS_FOOTER:GENERIC_FOOTER);
+  document.getElementById('footer').innerHTML=esc(f)+(DATA.can_edit?' <button class="edit-link" id="editFooter">edit</button>':'');
+  const b=document.getElementById('editFooter'); if(b) b.onclick=openEditProject;
+}
+
+/* ---------- rooms ---------- */
+function floorKey(r){ return r.floor||''; }
+function floorsPresent(){ const extra=[...new Set(DATA.rooms.map(floorKey).filter(f=>f&&!FLOORS.includes(f)))];
+  const hasNone=DATA.rooms.some(r=>!r.floor); return [...FLOORS,...extra,...(hasNone?['']:[])]; }
+function groupLabel(f){ return f===''?'Unassigned':(FLOOR_LABEL[f]||f); }
+function visibleRooms(){ return DATA.rooms.filter(r=>(floorFilter==='All'||floorKey(r)===floorFilter)&&(!query||String(r.name).toLowerCase().includes(query))); }
+function roomNote(r){ return r.note || (PID==='loomis-isleworth'?LOOMIS_NOTES[r.id]||'':''); }
+function renderPills(){
+  const extra=floorsPresent().filter(f=>f&&!FLOORS.includes(f));
+  const list=['All',...FLOORS,...extra];
+  document.getElementById('pills').innerHTML=list.map(f=>`<button class="pill ${floorFilter===f?'on':''}" data-f="${esc(f)}">${esc(f)}</button>`).join('');
+  document.querySelectorAll('#pills .pill').forEach(b=>b.onclick=()=>{ floorFilter=b.dataset.f; renderPills(); renderRooms(); });
+}
+function renderRooms(){
+  const vis=visibleRooms();
+  // sidebar
+  const nav=floorsPresent().map(f=>{ const rs=vis.filter(r=>floorKey(r)===f); if(!rs.length) return '';
+    return `<div class="grp"><span class="lbl">${esc(groupLabel(f))}</span>${rs.map(r=>`<button class="rlink" data-id="${esc(r.id)}"><span>${esc(r.name)}</span><span class="n">${(r.line_items||[]).length}</span></button>`).join('')}</div>`; }).join('');
+  document.getElementById('roomNav').innerHTML=nav||(DATA.rooms.length?'<div class="nolines">No rooms match.</div>':'<div class="nolines">No rooms yet.</div>');
+  document.querySelectorAll('#roomNav .rlink').forEach(b=>b.onclick=()=>{ const c=document.getElementById('room-'+b.dataset.id); if(c) c.scrollIntoView({behavior:'smooth',block:'start'}); });
+  // cards
+  const cards=document.getElementById('cards');
+  if(!DATA.rooms.length){
+    cards.innerHTML=`<div class="empty"><h3>No rooms in this project's scope yet</h3>
+      <p>${DATA.can_edit?'Start by adding the first room — then add the lighting, shading, controls and A/V items in scope for it.':'Your Better Living Systems team hasn\'t added rooms to this scope yet.'}</p>
+      ${DATA.can_edit?'<button class="btn" id="emptyAddRoom">+ Add room</button>':''}</div>`;
+    const b=document.getElementById('emptyAddRoom'); if(b) b.onclick=()=>openAddRoom();
+    return;
+  }
+  if(!vis.length){ cards.innerHTML='<div class="empty">No rooms match this filter.</div>'; return; }
+  cards.innerHTML=vis.map(roomCard).join('');
+  wireCards();
+}
+function qtyText(li){ return (li.qty==null||li.qty==='')?'—':`${Number(li.qty).toLocaleString()} ${esc(li.unit||'ea')}`; }
+function origText(li){ const o=li.orig; if(!o) return ''; return `Originally ${o.source||''}: ${o.category||''} — ${o.item||''} · ${o.qty==null?'—':o.qty} ${o.unit||''}`; }
+function editRow(li,roomId,idx){
+  const cats=CATEGORIES.includes(li.category)||!li.category?CATEGORIES:[li.category,...CATEGORIES];
+  const units=UNITS.includes(li.unit)||!li.unit?UNITS:[li.unit,...UNITS];
+  return `<tr class="editing" data-room="${esc(roomId)}" data-idx="${idx}">
+    <td class="cat"><select class="f" data-f="category">${cats.map(c=>`<option ${c===(li.category||'Recessed')?'selected':''}>${esc(c)}</option>`).join('')}</select></td>
+    <td><input class="f" data-f="item" value="${esc(li.item||'')}" placeholder="e.g. Ketra D2 downlight (or comparable)"></td>
+    <td class="qty"><div class="qtyedit"><input class="f qn" data-f="qty" type="number" min="0" step="any" value="${li.qty==null?'':esc(li.qty)}"><select class="f un" data-f="unit">${units.map(u=>`<option ${u===(li.unit||'ea')?'selected':''}>${esc(u)}</option>`).join('')}</select></div></td>
+    <td class="src" colspan="2">${badge(idx==='new'?'ADDED':li.source)}
+      <div class="btns"><button class="btn" data-a="save">Save</button><button class="btn ghost" data-a="cancel">Cancel</button>${idx==='new'?'':'<button class="btn danger" data-a="remove" title="Remove line">✕</button>'}</div></td></tr>`;
+}
+function roomCard(r){
+  const lines=r.line_items||[]; const note=roomNote(r);
+  const isEd=i=>editing&&editing.roomId===r.id&&editing.idx===i;
+  const rows=lines.map((li,i)=> isEd(i)?editRow(li,r.id,i):`<tr>
+      <td class="cat">${esc(li.category||'')}</td>
+      <td>${esc(li.item||'')}${li.orig?`<div class="orig">${esc(origText(li))}</div>`:''}</td>
+      <td class="qty">${qtyText(li)}</td>
+      <td class="src">${badge(li.source)}</td>
+      <td class="act">${DATA.can_edit?`<button class="edit-link" data-a="edit" data-room="${esc(r.id)}" data-idx="${i}">edit</button>`:''}</td></tr>`).join('')
+    + (isEd('new')?editRow({category:'Recessed',item:'',qty:null,unit:'ea',source:'ADDED'},r.id,'new'):'');
+  const table=(lines.length||isEd('new'))?`<table><thead><tr><th>Category</th><th>Item</th><th class="qty">Qty</th><th class="src">Source</th><th></th></tr></thead><tbody>${rows}</tbody></table>`
+    :`<div class="nolines">Nothing in scope for this room yet.</div>`;
+  const floorTxt=r.floor?(FLOOR_LABEL[r.floor]||r.floor):'Unassigned';
+  return `<section class="card" id="room-${esc(r.id)}">
+    <div class="card-h"><h3>${esc(r.name)}</h3><span class="lbl">${esc(floorTxt)} · ${lines.length} line${lines.length===1?'':'s'}</span></div>
+    ${note?`<div class="note-row"><div class="note" style="flex:1">${esc(note)}</div>${DATA.can_edit?`<button class="edit-link" data-a="note" data-room="${esc(r.id)}" style="margin-top:10px">edit</button>`:''}</div>`
+          :(DATA.can_edit?`<div><button class="edit-link" data-a="note" data-room="${esc(r.id)}">+ note</button></div>`:'')}
+    ${table}
+    ${DATA.can_edit&&!isEd('new')?`<button class="add-line" data-a="add" data-room="${esc(r.id)}">+ Add item to ${esc(r.name)}</button>`:''}
+  </section>`;
+}
+function roomById(id){ return DATA.rooms.find(r=>r.id===id); }
+function wireCards(){
+  if(!DATA.can_edit) return;
+  document.querySelectorAll('#cards [data-a="edit"]').forEach(b=>b.onclick=()=>{ editing={roomId:b.dataset.room,idx:Number(b.dataset.idx)}; renderRooms(); focusEdit(); });
+  document.querySelectorAll('#cards [data-a="add"]').forEach(b=>b.onclick=()=>{ editing={roomId:b.dataset.room,idx:'new'}; renderRooms(); focusEdit(); });
+  document.querySelectorAll('#cards [data-a="note"]').forEach(b=>b.onclick=()=>openNote(b.dataset.room));
+  const tr=document.querySelector('#cards tr.editing'); if(!tr) return;
+  const r=roomById(tr.dataset.room), idx=tr.dataset.idx==='new'?'new':Number(tr.dataset.idx);
+  const val=f=>tr.querySelector(`[data-f="${f}"]`).value;
+  tr.querySelector('[data-a="cancel"]').onclick=()=>{ editing=null; renderRooms(); };
+  tr.querySelectorAll('input').forEach(i=>i.addEventListener('keydown',e=>{ if(e.key==='Enter') tr.querySelector('[data-a="save"]').click(); if(e.key==='Escape'){ editing=null; renderRooms(); } }));
+  tr.querySelector('[data-a="save"]').onclick=async()=>{
+    const q=val('qty'); const next={category:val('category'),item:val('item').trim(),qty:q===''?null:Number(q),unit:val('unit')};
+    if(!next.item){ alert('Describe the item first.'); return; }
+    const lines=(r.line_items||[]).map(x=>({...x}));
+    const stamp={by:ME.name||'team',at:new Date().toISOString()};
+    if(idx==='new'){ lines.push({id:'li'+Date.now().toString(36)+Math.floor(Math.random()*1000),...next,source:'ADDED',added_by:stamp.by,added_at:stamp.at}); }
+    else{
+      const cur=lines[idx]; const changed=['category','item','qty','unit'].some(k=>String(cur[k]==null?'':cur[k])!==String(next[k]==null?'':next[k]));
+      if(!changed){ editing=null; renderRooms(); return; }
+      const upd={...cur,...next,edited_by:stamp.by,edited_at:stamp.at};
+      if(cur.source!=='ADDED'&&cur.source!=='EDITED'){ upd.orig={category:cur.category,item:cur.item,qty:cur.qty,unit:cur.unit,source:cur.source}; upd.source='EDITED'; }
+      else if(cur.source==='EDITED'&&!cur.orig){ /* edited earlier in the old viewer: keep as EDITED */ }
+      lines[idx]=upd;
+    }
+    await saveRoom(r,{line_items:lines});
+  };
+  const rm=tr.querySelector('[data-a="remove"]'); if(rm) rm.onclick=async()=>{
+    if(!confirm('Remove this line from '+r.name+'?')) return;
+    const lines=(r.line_items||[]).filter((_,i)=>i!==idx); await saveRoom(r,{line_items:lines});
+  };
+}
+function focusEdit(){ const i=document.querySelector('#cards tr.editing [data-f="item"]'); if(i){ i.focus(); i.select&&i.select(); } }
+async function saveRoom(r,fields){
+  setSave('','Saving…');
+  try{
+    const res=await api('scope/by-room/room',{method:'PUT',body:{project:PID,id:r.id,base_updated_at:r.updated_at||null,...fields}});
+    if(fields.line_items) r.line_items=fields.line_items;
+    if(fields.note!==undefined) r.note=fields.note;
+    r.updated_at=res.updated_at; r.updated_by=res.updated_by; editing=null; setSave('ok','Saved ✓'); renderAll();
+  }catch(e){
+    setSave('err','Save failed');
+    if(e.status===409){ alert(e.message+' Reloading now — please redo your change.'); await reload(); }
+    else alert(e.message);
+  }
+}
+async function reload(){ try{ DATA=await api('scope/by-room?project='+encodeURIComponent(PID)); editing=null; renderAll(); }catch(e){ alert(e.message); } }
+
+/* ---------- modals ---------- */
+function modal(html){ const bg=document.getElementById('modalBg'); document.getElementById('modal').innerHTML=html; bg.classList.add('on');
+  bg.onclick=e=>{ if(e.target===bg) closeModal(); }; }
+function closeModal(){ document.getElementById('modalBg').classList.remove('on'); }
+function openNote(roomId){ const r=roomById(roomId);
+  modal(`<h4>Note — ${esc(r.name)}</h4><textarea class="f" id="mNote">${esc(roomNote(r))}</textarea>
+    <div class="btns"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn" id="mSave">Save note</button></div>`);
+  document.getElementById('mCancel').onclick=closeModal;
+  document.getElementById('mSave').onclick=async()=>{ const v=document.getElementById('mNote').value.trim(); closeModal(); await saveRoom(r,{note:v}); };
+}
+function openAddRoom(){
+  const defFloor=FLOORS.includes(floorFilter)?floorFilter:'Main';
+  modal(`<h4>Add room</h4><label class="lbl">Room name</label><input class="f" id="mName" placeholder="e.g. Great Room">
+    <label class="lbl">Floor</label><select class="f" id="mFloor">${FLOORS.map(f=>`<option ${f===defFloor?'selected':''}>${f}</option>`).join('')}</select>
+    <div class="btns"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn" id="mSave">Add room</button></div>`);
+  document.getElementById('mCancel').onclick=closeModal; setTimeout(()=>document.getElementById('mName').focus(),30);
+  document.getElementById('mSave').onclick=async()=>{ const name=document.getElementById('mName').value.trim(); const floor=document.getElementById('mFloor').value;
+    if(!name){ alert('Name the room first.'); return; }
+    closeModal(); setSave('','Saving…');
+    try{ const res=await api('scope/room',{method:'POST',body:{project:PID,name,floor}}); setSave('ok','Room added ✓');
+      await reload(); floorFilter='All'; query=''; document.getElementById('search').value=''; renderPills(); renderRooms();
+      editing={roomId:res.id,idx:'new'}; renderRooms(); const c=document.getElementById('room-'+res.id); if(c) c.scrollIntoView({behavior:'smooth',block:'start'}); focusEdit(); }
+    catch(e){ setSave('err','Save failed'); alert(e.message); } };
+}
+function openEditProject(){
+  const p=DATA.project;
+  modal(`<h4>Header &amp; footer</h4>
+    <label class="lbl">Location (eyebrow, e.g. Isleworth)</label><input class="f" id="mLoc" value="${esc(locationWord())}">
+    <label class="lbl">Footer note</label><textarea class="f" id="mFoot">${esc(p.footer||(PID==='loomis-isleworth'?LOOMIS_FOOTER:GENERIC_FOOTER))}</textarea>
+    <div class="btns"><button class="btn ghost" id="mCancel">Cancel</button><button class="btn" id="mSave">Save</button></div>`);
+  document.getElementById('mCancel').onclick=closeModal;
+  document.getElementById('mSave').onclick=async()=>{ const location=document.getElementById('mLoc').value.trim(), footer=document.getElementById('mFoot').value.trim();
+    closeModal(); setSave('','Saving…');
+    try{ await api('scope/by-room/project',{method:'PUT',body:{project:PID,location,footer}}); p.location=location; p.footer=footer; setSave('ok','Saved ✓'); renderHeader(); renderFooter(); }
+    catch(e){ setSave('err','Save failed'); alert(e.message); } };
+}
+
+function renderAll(){ renderHeader(); renderStats(); renderPills(); renderRooms(); renderFooter(); }
+</script>
+</body></html>

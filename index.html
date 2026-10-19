@@ -1277,7 +1277,9 @@ async function setItemVis(key,val){ CUR_CFG.category_vis=CUR_CFG.category_vis||{
   try{ await api2('project-config',{method:'POST',body:{project:CUR_PID,category_vis:CUR_CFG.category_vis}}); }catch(e){ alert(e.message); }
   const cat=LOOMIS.find(c=>c.id===CUR_CATID); if(cat) renderCategory(cat,CUR_INTERNAL); }
 const api2=async(p,o={})=>{const r=await fetch('/api/'+p,{credentials:'same-origin',headers:{'content-type':'application/json'},...o,body:o.body?JSON.stringify(o.body):undefined});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Request failed');return d;};
-const DASH_CATS=()=>[{id:'plans',label:'Plans',plans:true}].concat(LOOMIS.map(c=>({id:c.id,label:c.label})));
+const DASH_CATS=()=>[{id:'plans',label:'Plans',plans:true},{id:'scope',label:'Project Scope by Room',scope:true}].concat(LOOMIS.map(c=>({id:c.id,label:c.label})));
+// The scope card is on every project for the team; clients only see it once it's set Visible.
+function dashCatVisible(c){ if(c.scope){ const v=CUR_CFG&&CUR_CFG.category_vis; return !!(v&&v.scope===true); } return catVisible(c.id); }
 
 function hideChrome(){ ['hero','navwrap'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';});
   ['portfolioBtn','projBtn'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none';}); }
@@ -1392,15 +1394,15 @@ function renderDashHome(internal){
   showContentArea();
   const cats=DASH_CATS();
   const cover=(c)=>{ if(c.plans) return '/'+CUR_PID+'-plan-thumb.jpg'; const L=LOOMIS.find(x=>x.id===c.id); const it=L&&L.items&&L.items.find(i=>i.image); return it?it.image:''; };
-  const cards=cats.filter(c=>internal||catVisible(c.id)).map(c=>{
-    const img=cover(c), vis=catVisible(c.id);
+  const cards=cats.filter(c=>internal||dashCatVisible(c)).map(c=>{
+    const img=c.scope?'':cover(c), vis=dashCatVisible(c);
     const drop = internal ? `<div class="vis-ctl"><select onchange="setVisibility('${c.id}',this.value)" onclick="event.stopPropagation()">
         <option value="visible" ${vis?'selected':''}>Visible</option><option value="hide" ${!vis?'selected':''}>Hide</option></select></div>` : '';
     return `<div class="dcard ${(!vis&&internal)?'dim':''}">${drop}
       <button class="pcard" onclick="selectDashCat('${c.id}',${!!internal})">
         <div class="pcard-media">${img?`<img src="${escapeAttr(img)}" alt="${escapeAttr(c.label)}" onerror="this.style.opacity=.12">`:`<div class="media-fallback"><div class="fi">&#9646;</div><span>${escapeHTML(c.label)}</span></div>`}</div>
-        <div class="pcard-body"><div class="pcard-brand">${c.plans?'Plans & room review':'Category'}</div><div class="pcard-title">${escapeHTML(c.label)}</div>
-        <div class="pcard-meta"><span>${c.plans?'Open plans':'Browse'}</span><span class="go">Open <span class="arrow">&rarr;</span></span></div></div>
+        <div class="pcard-body"><div class="pcard-brand">${c.plans?'Plans & room review':(c.scope?'Scope of work':'Category')}</div><div class="pcard-title">${escapeHTML(c.label)}</div>
+        <div class="pcard-meta"><span>${c.plans?'Open plans':(c.scope?'Room-by-room scope':'Browse')}</span><span class="go">Open <span class="arrow">&rarr;</span></span></div></div>
       </button></div>`;
   }).join('');
   const bar = internal
@@ -1424,6 +1426,7 @@ async function setVisibility(catId,val){
 function selectDashCat(catId, internal){
   CUR_INTERNAL=!!internal;
   if(catId==='plans'){ renderPlans(internal); return; }
+  if(catId==='scope'){ location.href='/scope?project='+encodeURIComponent(CUR_PID); return; }
   const cat=LOOMIS.find(c=>c.id===catId); if(!cat) return;
   renderCategory(cat,internal);
   const back=document.createElement('button'); back.className='back-link'; back.innerHTML='<span class="arrow">&larr;</span> Back to '+escapeHTML(CUR_NAME);

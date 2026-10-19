@@ -178,6 +178,9 @@ async function ensureScopeTables(env){
   try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN owner_email TEXT").run(); } catch(e){}
   try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN category_vis TEXT").run(); } catch(e){}
   try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN client_last_name TEXT").run(); } catch(e){}
+  // "Project Scope by Room" view: per-project eyebrow location + footer note (additive).
+  try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN scope_location TEXT").run(); } catch(e){}
+  try { await env.DB.prepare("ALTER TABLE scope_projects ADD COLUMN scope_footer TEXT").run(); } catch(e){}
   await env.DB.prepare(`CREATE TABLE IF NOT EXISTS scope_rooms (
     id TEXT PRIMARY KEY, project_id TEXT, name TEXT, floor TEXT, drawing_url TEXT,
     scope_text TEXT, callouts TEXT, line_items TEXT, sort INTEGER DEFAULT 0,
@@ -685,6 +688,96 @@ export async function onRequest(context) {
       const clientLast = (b.client_last_name || "").toString().slice(0,120) || null;
       await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at,owner_email,category_vis,client_last_name) VALUES (?,?,?,?,?,?,?)").bind(id, name, now, now, ownerEmail, catVis, clientLast).run();
       return json({ ok: true, id, name });
+    }
+
+    // ================= PROJECT SCOPE BY ROOM (scope.html) =================
+    // Read-only room list + line items for any project. Team (admin/sales) can open
+    // every project; a client only an assigned project whose "scope" card has been
+    // made Visible on the dashboard. Never creates rows (unlike GET /scope).
+    if (route === "scope/by-room" && method === "GET") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const pid = (url.searchParams.get("project") || "").trim();
+      if (!pid) return json({ error: "project required." }, 400);
+      const team = canEditScope(user);
+      const proj = await env.DB.prepare("SELECT id,name,client_last_name,category_vis,scope_location,scope_footer,updated_at FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!team) {
+        if (!canAccess(user, pid) || !proj) return json({ error: "No access to this project." }, 403);
+        const vis = safeJSON(proj.category_vis, {}) || {};
+        if (vis.scope !== true) return json({ error: "The scope for this project hasn't been shared yet." }, 403);
+      }
+      if (!proj) return json({ error: "No such project." }, 404);
+      const { results } = await env.DB.prepare("SELECT id,name,floor,scope_text,line_items,sort,updated_at,updated_by FROM scope_rooms WHERE project_id=? ORDER BY sort ASC, name ASC").bind(pid).all();
+      return json({
+        project: { id: proj.id, name: proj.name, client_last_name: proj.client_last_name || null,
+          location: proj.scope_location || null, footer: proj.scope_footer || null },
+        can_edit: team,
+        rooms: (results || []).map(r => ({ id: r.id, name: r.name, floor: r.floor || null, sort: r.sort || 0,
+          note: r.scope_text || "", line_items: safeJSON(r.line_items, []),
+          updated_at: r.updated_at || null, updated_by: r.updated_by || null })),
+      });
+    }
+    // Narrow room update: only the fields sent (line_items / note / name / floor).
+    // Leaves drawing_url + callouts untouched (the full PUT /scope/room overwrites them).
+    // Optional base_updated_at → 409 if someone else saved the room in the meantime.
+    if (route === "scope/by-room/room" && method === "PUT") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only — ask a BLS team member to edit." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const id = (b.id || "").toString().trim();
+      const pid = (b.project || "").toString().trim();
+      if (!id || !pid) return json({ error: "Room id and project required." }, 400);
+      const existing = await env.DB.prepare("SELECT id,updated_at FROM scope_rooms WHERE id=? AND project_id=?").bind(id, pid).first();
+      if (!existing) return json({ error: "Room not found." }, 404);
+      if (b.base_updated_at !== undefined && (existing.updated_at || null) !== (b.base_updated_at || null)) {
+        return json({ error: "Someone else just updated this room. Reload to see their changes.", conflict: true }, 409);
+      }
+      const sets = [], binds = [];
+      if (b.line_items !== undefined) {
+        if (!Array.isArray(b.line_items)) return json({ error: "line_items must be an array." }, 400);
+        const clean = b.line_items.slice(0, 500).map((li) => {
+          const o = (li && typeof li === "object") ? li : {};
+          const out = { ...o };
+          out.category = String(o.category || "Other").slice(0, 60);
+          out.item = String(o.item || "").slice(0, 300);
+          out.qty = (o.qty === null || o.qty === "" || o.qty === undefined) ? null : Number(o.qty);
+          if (out.qty !== null && !isFinite(out.qty)) out.qty = null;
+          out.unit = String(o.unit || "ea").slice(0, 20);
+          out.source = String(o.source || "ADDED").slice(0, 20);
+          return out;
+        });
+        sets.push("line_items=?"); binds.push(JSON.stringify(clean));
+      }
+      if (b.note !== undefined) { sets.push("scope_text=?"); binds.push(String(b.note || "").slice(0, 20000)); }
+      if (b.name !== undefined && String(b.name).trim()) { sets.push("name=?"); binds.push(String(b.name).trim().slice(0, 120)); }
+      if (b.floor !== undefined) { sets.push("floor=?"); binds.push(b.floor ? String(b.floor).slice(0, 40) : null); }
+      if (!sets.length) return json({ error: "Nothing to update." }, 400);
+      const now = new Date().toISOString(), by = user.name || user.last_name;
+      sets.push("updated_at=?", "updated_by=?"); binds.push(now, by, id, pid);
+      await env.DB.prepare("UPDATE scope_rooms SET " + sets.join(", ") + " WHERE id=? AND project_id=?").bind(...binds).run();
+      return json({ ok: true, updated_at: now, updated_by: by });
+    }
+    // Per-project header location + footer note for the scope view. Team only.
+    if (route === "scope/by-room/project" && method === "PUT") {
+      await ensureScopeTables(env);
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      if (!canEditScope(user)) return json({ error: "View-only." }, 403);
+      const b = await request.json().catch(() => ({}));
+      const pid = (b.project || "").toString().trim();
+      if (!pid) return json({ error: "project required." }, 400);
+      const exists = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind(pid).first();
+      if (!exists) return json({ error: "No such project." }, 404);
+      const sets = [], binds = [];
+      if (b.location !== undefined) { sets.push("scope_location=?"); binds.push(String(b.location || "").slice(0, 120)); }
+      if (b.footer !== undefined) { sets.push("scope_footer=?"); binds.push(String(b.footer || "").slice(0, 4000)); }
+      if (!sets.length) return json({ error: "Nothing to update." }, 400);
+      binds.push(pid);
+      await env.DB.prepare("UPDATE scope_projects SET " + sets.join(", ") + " WHERE id=?").bind(...binds).run();
+      return json({ ok: true });
     }
 
     // ---- Scope plans ----
