@@ -231,7 +231,16 @@ function queueSave(){ if(!DATA.can_edit) return; dirty=true; setSave('saving','S
 async function saveRoom(){
   const r=room(); if(!r||!DATA.can_edit){return;}
   try{
-    await api('scope/room',{method:'PUT',body:{id:r.id,name:r.name,floor:r.floor,drawing_url:r.drawing_url,scope_text:r.scope_text,callouts:r.callouts,line_items:r.line_items||[],sort:r.sort}});
+    // base_updated_at = the version this editor last loaded/saved; the server
+    // answers 409 if someone else saved the room since (no silent overwrite).
+    const res=await fetch('/api/scope/room',{method:'PUT',headers:{'content-type':'application/json'},credentials:'include',
+      body:JSON.stringify({id:r.id,name:r.name,floor:r.floor,drawing_url:r.drawing_url,scope_text:r.scope_text,callouts:r.callouts,line_items:r.line_items||[],sort:r.sort,base_updated_at:r.updated_at||null})});
+    const d=await res.json().catch(()=>({}));
+    if(res.status===409){ dirty=false; setSave('err','Not saved — someone else changed this room. Reload to see their version.');
+      if(confirm('Someone else just updated "'+(r.name||'this room')+'". Your last change was NOT saved.\n\nReload now to see their version?')) location.reload();
+      return; }
+    if(!res.ok) throw new Error(d.error||'Error');
+    r.updated_at=d.updated_at; r.updated_by=d.updated_by;
     dirty=false; setSave('ok','Saved ✓'); setTimeout(()=>{if(!dirty)setSave('','');},1500);
   }catch(e){ setSave('err','Save failed'); }
 }

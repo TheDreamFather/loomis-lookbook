@@ -79,6 +79,11 @@ async function verifyPassword(password, stored) {
   return timingSafeEqualHex(buf2hex(bits), hashHex);
 }
 
+// Current password check: first-time accounts still use their PIN (last4).
+async function currentPasswordOk(user, pw) {
+  const firstTime = user.must_change_password || !user.password_hash;
+  return firstTime ? (String(pw) === String(user.last4 || "") && !!user.last4) : await verifyPassword(pw, user.password_hash);
+}
 function passwordIssue(pw) {
   pw = String(pw || "");
   if (pw.length < 8) return "at least 8 characters";
@@ -88,9 +93,24 @@ function passwordIssue(pw) {
   return null;
 }
 
+// Fail closed: there is no fallback secret. onRequest() refuses to serve auth
+// routes when SESSION_SECRET is missing (see CONFIG GUARD), so this never signs
+// with a guessable key.
 function secretOf(env) {
-  return env.SESSION_SECRET || "dev-insecure-secret-set-SESSION_SECRET";
+  if (!env.SESSION_SECRET || String(env.SESSION_SECRET).length < 16) throw new Error("SESSION_SECRET is not configured.");
+  return env.SESSION_SECRET;
 }
+// Public base URL of the lookbook (invite links, emails). Never derived from the
+// caller's host, so CRM calls through an old domain still produce new-domain links.
+const DEFAULT_LOOKBOOK_URL = "https://lookbook.betterlivingsystems.app";
+function lookbookUrl(env) {
+  return String(env.LOOKBOOK_URL || DEFAULT_LOOKBOOK_URL).replace(/\/+$/, "");
+}
+const DEFAULT_NOTES_FROM = "Better Living Systems <noreply@betterlivingsystems.app>";
+const DEFAULT_OWNER_EMAIL = "corban@betterlivingsystems.com";
+function isTeam(user) { return !!user && (user.role === "admin" || user.role === "sales"); }
+// Team (admin/sales) see every project; clients only their assigned project ids.
+function canView(user, pid) { return !!user && !!pid && (isTeam(user) || assignedIds(user).includes(pid)); }
 function assignedIds(user) {
   return (user.project_ids || "").split(",").map((s) => s.trim()).filter(Boolean);
 }
@@ -130,6 +150,8 @@ function clearCookieHeader() {
 }
 
 // Shared team-auth gate for cross-app (CRM) endpoints.
+// Fail closed: when TEAM_AUTH_KEY is unset every team endpoint rejects the call
+// (callers check gate.ok only).
 async function teamAuth(request, env) {
   if (!env.TEAM_AUTH_KEY) return { configured: false, ok: false };
   const provided = request.headers.get("x-team-auth") || "";
@@ -194,16 +216,22 @@ async function ensureScopeTables(env){
     mime TEXT, img BLOB, created_at TEXT, created_by TEXT
   )`).run();
   const now = new Date().toISOString();
-  const proj = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
-  if (!proj) {
-    await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at) VALUES (?,?,?,?)")
-      .bind("loomis-isleworth","Loomis Isleworth",now,now).run();
-  }
   // Default the project owner email where unset (editable per project afterwards).
-  try { await env.DB.prepare("UPDATE scope_projects SET owner_email=? WHERE owner_email IS NULL OR owner_email=''").bind("corban@betterlivingsystems.com").run(); } catch(e){}
+  try { await env.DB.prepare("UPDATE scope_projects SET owner_email=? WHERE owner_email IS NULL OR owner_email=''").bind(DEFAULT_OWNER_EMAIL).run(); } catch(e){}
+  // One-time Loomis seed. SAFETY: this never deletes anything. It only runs when
+  // the seed flag is missing AND the Loomis project has no rooms at all; if rooms
+  // already exist the flag is simply (re)written. (Previously a missing flag wiped
+  // every Loomis room and reseeded 49 empty ones, and the project was recreated on
+  // every request.)
   const flag = await env.DB.prepare("SELECT value FROM scope_meta WHERE key=?").bind("isleworth_rooms_v2").first();
-  if (!flag) {
-    await env.DB.prepare("DELETE FROM scope_rooms WHERE project_id=?").bind("loomis-isleworth").run();
+  if (flag) return;
+  const have = await env.DB.prepare("SELECT COUNT(*) AS n FROM scope_rooms WHERE project_id=?").bind("loomis-isleworth").first();
+  if (!have || !have.n) {
+    const proj = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind("loomis-isleworth").first();
+    if (!proj) {
+      await env.DB.prepare("INSERT INTO scope_projects (id,name,created_at,updated_at,owner_email) VALUES (?,?,?,?,?)")
+        .bind("loomis-isleworth","Loomis Isleworth",now,now,DEFAULT_OWNER_EMAIL).run();
+    }
     let sort = 0;
     for (const grp of LOOMIS_FLOORS) {
       for (const name of grp.rooms) {
@@ -212,15 +240,15 @@ async function ensureScopeTables(env){
           .bind(id, "loomis-isleworth", name, grp.floor, null, "", "[]", sort++, now).run();
       }
     }
-    await env.DB.prepare("INSERT INTO scope_meta (key,value) VALUES (?,?)").bind("isleworth_rooms_v2", now).run();
   }
+  await env.DB.prepare("INSERT OR IGNORE INTO scope_meta (key,value) VALUES (?,?)").bind("isleworth_rooms_v2", now).run();
 }
 function rowToScopeRoom(r){
   return { id:r.id, project_id:r.project_id, name:r.name, floor:r.floor||null, drawing_url:r.drawing_url||null,
     scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), line_items:safeJSON(r.line_items,[]), sort:r.sort||0,
     updated_at:r.updated_at, updated_by:r.updated_by||null };
 }
-function canEditScope(user){ return !!user && (user.role === "admin" || user.role === "sales"); }
+function canEditScope(user){ return isTeam(user); }
 async function makeInviteToken(secret, userId, ttlMs){
   const exp = Date.now() + (ttlMs || 7*24*60*60*1000);
   const body = `${userId}.${exp}.inv`;
@@ -261,6 +289,13 @@ export async function onRequest(context) {
   if (!env.DB) {
     return json({ error: "Database not connected yet. Bind D1 as DB on the Pages project." }, 503);
   }
+  // ---- CONFIG GUARD (fail closed) ----
+  // Without SESSION_SECRET nothing can be signed or verified safely, so every route
+  // except the static category list refuses to run.
+  if (!(route === "categories" && method === "GET") && (!env.SESSION_SECRET || String(env.SESSION_SECRET).length < 16)) {
+    console.error("lookbook: SESSION_SECRET missing/too short - refusing request to /api/" + route);
+    return json({ error: "Sign-in is temporarily unavailable (server not configured)." }, 503);
+  }
 
   try {
     await ensureUsersColumns(env);
@@ -298,19 +333,26 @@ export async function onRequest(context) {
     // ---- SET / CHANGE PASSWORD ----
     if (route === "set-password" && method === "POST") {
       const body = await request.json().catch(() => ({}));
-      const newPassword = (body.newPassword || "").toString();
       const teamLastName = (body.lastName || "").toString().trim();
 
+      // The CRM sends { lastName, current, next }; older callers send newPassword.
+      const nextPw = (body.newPassword || body.next || "").toString();
+      const currentPw = (body.current || body.currentPassword || "").toString();
       if (teamLastName) {
         const gate = await teamAuth(request, env);
         if (!gate.configured) return json({ ok: false, error: "Team auth not configured on this project." }, 403);
         if (!gate.ok) return json({ ok: false, error: "Unauthorized caller." }, 401);
-        const issue = passwordIssue(newPassword);
+        const issue = passwordIssue(nextPw);
         if (issue) return json({ ok: false, error: `Password needs ${issue}.` }, 400);
         const user = await env.DB
-          .prepare("SELECT id FROM users WHERE lower(last_name)=lower(?)")
+          .prepare("SELECT id,last4,password_hash,must_change_password,active FROM users WHERE lower(last_name)=lower(?)")
           .bind(teamLastName).first();
         if (!user) return json({ ok: false, error: "User not found." }, 404);
+        if (user.active === 0) return json({ ok: false, error: "This account has been deactivated." }, 403);
+        if (!currentPw || !(await currentPasswordOk(user, currentPw))) {
+          return json({ ok: false, error: "Current password is incorrect." }, 403);
+        }
+        const newPassword = nextPw;
         const hash = await hashPassword(newPassword);
         await env.DB
           .prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?")
@@ -320,9 +362,16 @@ export async function onRequest(context) {
 
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in first." }, 401);
-      const issue = passwordIssue(newPassword);
+      // First-time setup (signed in with the PIN, must_change) needs no current
+      // password; every later change must prove the current one.
+      if (!user.must_change_password && user.password_hash) {
+        if (!currentPw || !(await verifyPassword(currentPw, user.password_hash))) {
+          return json({ error: "Current password is incorrect." }, 403);
+        }
+      }
+      const issue = passwordIssue(nextPw);
       if (issue) return json({ error: `Password needs ${issue}.` }, 400);
-      const hash = await hashPassword(newPassword);
+      const hash = await hashPassword(nextPw);
       await env.DB
         .prepare("UPDATE users SET password_hash=?, must_change_password=0 WHERE id=?")
         .bind(hash, user.id).run();
@@ -345,7 +394,7 @@ export async function onRequest(context) {
     // ---- VALIDATE ----
     if (route === "validate" && method === "POST") {
       const gate = await teamAuth(request, env);
-      if (gate.configured && !gate.ok) return json({ valid: false, error: "Unauthorized caller." }, 401);
+      if (!gate.ok) return json({ valid: false, error: gate.configured ? "Unauthorized caller." : "Team auth not configured on this project." }, gate.configured ? 401 : 403);
       const body = await request.json().catch(() => ({}));
       const lastName = (body.lastName || "").toString().trim();
       const password = (body.password || "").toString();
@@ -404,11 +453,12 @@ export async function onRequest(context) {
       if (!user) return json({ error: "Please sign in." }, 401);
       const pid = (url.searchParams.get("project") || "").trim();
       if (!pid) return json({ error: "project required." }, 400);
+      if (!canView(user, pid)) return json({ error: "No access to this project." }, 403);
       const proj = await env.DB.prepare("SELECT id,name,owner_email,category_vis,client_last_name FROM scope_projects WHERE id=?").bind(pid).first();
       if (!proj) return json({ error: "No such project." }, 404);
       return json({
         id: proj.id, name: proj.name,
-        owner_email: proj.owner_email || null,
+        owner_email: isTeam(user) ? (proj.owner_email || null) : undefined,
         category_vis: safeJSON(proj.category_vis, null),
         client_last_name: proj.client_last_name || null,
         can_edit: canEditScope(user),
@@ -436,7 +486,10 @@ export async function onRequest(context) {
       return json({ ok: true });
     }
 
-    // ---- NOTES / QUESTIONS: client submits → email the project owner (Resend) ----
+    // ---- NOTES / QUESTIONS: client submits -> saved + emailed to the project's rep (Resend) ----
+    // Recipient: scope_projects.owner_email (the rep), else NOTES_TO, else the owner default.
+    // Optional NOTES_CC (comma list). Sender: NOTES_FROM (must be on a Resend-verified domain).
+    // No RESEND_API_KEY -> the note is still saved and the email is logged, never an error.
     if (route === "notes" && method === "POST") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
@@ -445,33 +498,38 @@ export async function onRequest(context) {
       const pid = (b.project || "").toString().trim();
       const message = (b.message || "").toString().trim().slice(0, 4000);
       if (!pid || !message) return json({ error: "Project and message are required." }, 400);
+      if (!canView(user, pid)) return json({ error: "No access to this project." }, 403);
       const proj = await env.DB.prepare("SELECT id,name,owner_email FROM scope_projects WHERE id=?").bind(pid).first();
       if (!proj) return json({ error: "No such project." }, 404);
-      const to = proj.owner_email || "corban@betterlivingsystems.com";
-      const from = env.NOTES_FROM || "Better Living Systems <noreply@salesbetterliving.com>";
+      const to = (proj.owner_email || env.NOTES_TO || DEFAULT_OWNER_EMAIL).toString().trim();
+      const cc = String(env.NOTES_CC || "").split(",").map((x) => x.trim()).filter((x) => x && x.toLowerCase() !== to.toLowerCase());
+      const from = env.NOTES_FROM || DEFAULT_NOTES_FROM;
       const author = user.name || user.last_name || "A client";
+      const link = lookbookUrl(env) + "/";
       const subject = `New note on ${proj.name} — from ${author}`;
-      const textBody = `${author} left a note / question on the ${proj.name} lookbook:\n\n${message}\n\n— Sent from the Better Living Systems lookbook`;
-      // Persist in the comments thread as type "note".
+      const textBody = `${author} left a note / question on the ${proj.name} lookbook:\n\n${message}\n\nOpen the lookbook: ${link}\n\n— Sent from the Better Living Systems lookbook`;
       try {
         await env.DB.prepare("INSERT INTO comments (project_id,author_name,role,type,text,created_at) VALUES (?,?,?,?,?,?)")
           .bind(pid, author, user.role, "note", message, new Date().toISOString()).run();
-      } catch (e) {}
+      } catch (e) { console.error("notes: could not save comment", String(e && e.message || e)); }
       if (!env.RESEND_API_KEY) {
-        return json({ ok: true, emailed: false, note: "Saved. Email not sent — RESEND_API_KEY is not set on this Pages project." });
+        console.log("notes: RESEND_API_KEY not set - email NOT sent (logged only)", JSON.stringify({ project: pid, to, cc, from, subject }));
+        return json({ ok: true, saved: true, emailed: false, note: "Saved. Your rep will see it in the lookbook." });
       }
       try {
         const payload = { from, to: [to], subject, text: textBody };
+        if (cc.length) payload.cc = cc;
         if (user.email) payload.reply_to = user.email;
         const r = await fetch("https://api.resend.com/emails", {
           method: "POST",
           headers: { "authorization": "Bearer " + env.RESEND_API_KEY, "content-type": "application/json" },
           body: JSON.stringify(payload),
         });
-        const ok = r.ok;
-        return json({ ok: true, emailed: ok, to: ok ? to : undefined, error: ok ? undefined : ("Email send failed (" + r.status + ")") });
+        if (!r.ok) console.error("notes: Resend send failed", r.status, (await r.text().catch(() => "")).slice(0, 300));
+        return json({ ok: true, saved: true, emailed: r.ok, error: r.ok ? undefined : ("Saved, but the email could not be sent (" + r.status + ").") });
       } catch (e) {
-        return json({ ok: true, emailed: false, error: String((e && e.message) || e) });
+        console.error("notes: Resend error", String((e && e.message) || e));
+        return json({ ok: true, saved: true, emailed: false, error: "Saved, but the email could not be sent." });
       }
     }
 
@@ -487,7 +545,7 @@ export async function onRequest(context) {
       }
       if (method === "POST") {
         const gate = await teamAuth(request, env);
-        if (gate.configured && !gate.ok) return json({ error: "Unauthorized caller." }, 401);
+        if (!gate.ok) return json({ error: gate.configured ? "Unauthorized caller." : "Team auth not configured on this project." }, gate.configured ? 401 : 403);
         const b = await request.json().catch(() => ({}));
         const action = b.action === "remove" ? "remove" : "upsert";
         const addr = (b.address || "").toString().trim();
@@ -534,7 +592,7 @@ export async function onRequest(context) {
     // ---- CREATE USER (team-auth) ----
     if (route === "users" && method === "POST") {
       const gate = await teamAuth(request, env);
-      if (gate.configured && !gate.ok) return json({ error: "Unauthorized caller." }, 401);
+      if (!gate.ok) return json({ error: gate.configured ? "Unauthorized caller." : "Team auth not configured on this project." }, gate.configured ? 401 : 403);
       const b = await request.json().catch(() => ({}));
       const name = (b.name || "").toString().trim();
       const email = (b.email || "").toString().trim().toLowerCase();
@@ -554,7 +612,7 @@ export async function onRequest(context) {
       // Persist the id so the row has a stable, non-null identifier (the token/session use it).
       try { await env.DB.prepare("UPDATE users SET id = CAST(? AS TEXT) WHERE rowid = ?").bind(uid, uid).run(); } catch(e){}
       const token = await makeInviteToken(secretOf(env), uid);
-      const accept_url = new URL(request.url).origin + "/invite.html?token=" + encodeURIComponent(token);
+      const accept_url = lookbookUrl(env) + "/invite.html?token=" + encodeURIComponent(token);
       return json({ ok: true, user_id: uid, role, token, accept_url });
     }
 
@@ -602,6 +660,7 @@ export async function onRequest(context) {
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in." }, 401);
       const pid = (url.searchParams.get("project") || "loomis-isleworth").trim();
+      if (!canView(user, pid)) return json({ error: "No access to this project." }, 403);
       let proj = await env.DB.prepare("SELECT * FROM scope_projects WHERE id=?").bind(pid).first();
       if (!proj) {
         if (!canEditScope(user)) return json({ error: "No scope workspace for this project yet." }, 404);
@@ -612,7 +671,7 @@ export async function onRequest(context) {
       }
       const { results } = await env.DB.prepare("SELECT * FROM scope_rooms WHERE project_id=? ORDER BY sort ASC, name ASC").bind(pid).all();
       return json({
-        project: { id: proj.id, name: proj.name, owner_email: proj.owner_email || null, category_vis: safeJSON(proj.category_vis, null) },
+        project: { id: proj.id, name: proj.name, owner_email: isTeam(user) ? (proj.owner_email || null) : null, category_vis: safeJSON(proj.category_vis, null) },
         can_edit: canEditScope(user),
         rooms: (results || []).map(rowToScopeRoom)
       });
@@ -639,8 +698,12 @@ export async function onRequest(context) {
       const b = await request.json().catch(() => ({}));
       const id = (b.id || "").toString().trim();
       if (!id) return json({ error: "Room id required." }, 400);
-      const existing = await env.DB.prepare("SELECT id FROM scope_rooms WHERE id=?").bind(id).first();
+      const existing = await env.DB.prepare("SELECT id,updated_at FROM scope_rooms WHERE id=?").bind(id).first();
       if (!existing) return json({ error: "Room not found." }, 404);
+      // Optimistic concurrency (same rule as PUT /scope/by-room/room).
+      if (b.base_updated_at !== undefined && (existing.updated_at || null) !== (b.base_updated_at || null)) {
+        return json({ error: "Someone else just updated this room. Reload to see their changes.", conflict: true, updated_at: existing.updated_at || null }, 409);
+      }
       const now = new Date().toISOString();
       const callouts = JSON.stringify(Array.isArray(b.callouts) ? b.callouts : []);
       const lineItems = JSON.stringify(Array.isArray(b.line_items) ? b.line_items : []);
@@ -669,7 +732,8 @@ export async function onRequest(context) {
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in." }, 401);
       const { results } = await env.DB.prepare("SELECT id,name,updated_at,owner_email FROM scope_projects ORDER BY name ASC").all();
-      return json({ projects: results || [], can_edit: canEditScope(user) });
+      const list = isTeam(user) ? (results || []) : (results || []).filter((p) => canView(user, p.id)).map((p) => ({ id: p.id, name: p.name, updated_at: p.updated_at }));
+      return json({ projects: list, can_edit: canEditScope(user) });
     }
     if (route === "scope/project" && method === "POST") {
       await ensureScopeTables(env);
@@ -786,16 +850,19 @@ export async function onRequest(context) {
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in." }, 401);
       const id = route.slice("scope/plan/".length);
-      const row = await env.DB.prepare("SELECT mime, img FROM scope_plans WHERE id=?").bind(id).first();
-      if (!row || !row.img) return json({ error: "Not found." }, 404);
+      const row = await env.DB.prepare("SELECT project_id, mime, img FROM scope_plans WHERE id=?").bind(id).first();
+      // Same 404 for "missing" and "not yours" so plan ids can't be probed.
+      if (!row || !row.img || !canView(user, row.project_id)) return json({ error: "Not found." }, 404);
       const bytes = (row.img instanceof ArrayBuffer) ? new Uint8Array(row.img) : row.img;
-      return new Response(bytes, { headers: { "content-type": row.mime || "image/jpeg", "cache-control": "public, max-age=31536000" } });
+      // private: per-user access, must not be stored by shared caches.
+      return new Response(bytes, { headers: { "content-type": row.mime || "image/jpeg", "cache-control": "private, max-age=86400" } });
     }
     if (route === "scope/plans" && method === "GET") {
       await ensureScopeTables(env);
       const user = await currentUser(context);
       if (!user) return json({ error: "Please sign in." }, 401);
       const pid = (url.searchParams.get("project") || "loomis-isleworth").trim();
+      if (!canView(user, pid)) return json({ error: "No access to this project." }, 403);
       const { results } = await env.DB.prepare("SELECT id, label, page_no FROM scope_plans WHERE project_id=? ORDER BY page_no ASC, created_at ASC").bind(pid).all();
       return json({ plans: (results||[]).map(r => ({ id:r.id, label:r.label, page_no:r.page_no, url:`/api/scope/plan/${r.id}` })) });
     }

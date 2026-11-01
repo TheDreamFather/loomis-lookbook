@@ -6,14 +6,14 @@
 <title>LOOKBOOK — Better Living Systems · Concept Presentation</title>
 <meta name="description" content="Better Living Systems presents Lookbook — a concept collection of lighting, shades, cinema, security, audio, and control, curated for your residence.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://lookbook.salesbetterliving.com/">
+<meta property="og:url" content="https://lookbook.betterlivingsystems.app/">
 <meta property="og:title" content="LOOKBOOK — Better Living Systems · Concept Presentation">
 <meta property="og:description" content="Better Living Systems presents Lookbook — a concept collection of lighting, shades, cinema, security, audio, and control, curated for your residence.">
-<meta property="og:image" content="https://lookbook.salesbetterliving.com/assets/cseed-fuchsia.jpg">
+<meta property="og:image" content="https://lookbook.betterlivingsystems.app/assets/cseed-fuchsia.jpg">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="LOOKBOOK — Better Living Systems · Concept Presentation">
 <meta name="twitter:description" content="Better Living Systems presents Lookbook — a concept collection of lighting, shades, cinema, security, audio, and control, curated for your residence.">
-<meta name="twitter:image" content="https://lookbook.salesbetterliving.com/assets/cseed-fuchsia.jpg">
+<meta name="twitter:image" content="https://lookbook.betterlivingsystems.app/assets/cseed-fuchsia.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter+Tight:wght@300;400;500&display=swap" rel="stylesheet">
@@ -1540,7 +1540,7 @@ function mountNotes(){
     if(!t){ s.textContent='Write a note first.'; return; }
     if(!CUR_PID){ s.textContent='Open a project first.'; return; }
     s.textContent='Sending…';
-    try{ const d=await api2('notes',{method:'POST',body:{project:CUR_PID,message:t}}); document.getElementById('nwText').value=''; s.textContent=d.emailed?'Sent ✓ — a team member will reply.':'Saved ✓ (email routing pending setup).'; }
+    try{ const d=await api2('notes',{method:'POST',body:{project:CUR_PID,message:t}}); document.getElementById('nwText').value=''; s.textContent=d.emailed?'Sent ✓ — a team member will reply.':'Saved ✓ — your rep will see it and reply.'; }
     catch(e){ s.textContent=e.message||'Could not send.'; }
   };
 }
