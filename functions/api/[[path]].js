@@ -508,13 +508,15 @@ export async function onRequest(context) {
       const link = lookbookUrl(env) + "/";
       const subject = `New note on ${proj.name} — from ${author}`;
       const textBody = `${author} left a note / question on the ${proj.name} lookbook:\n\n${message}\n\nOpen the lookbook: ${link}\n\n— Sent from the Better Living Systems lookbook`;
+      let saved = false;
       try {
         await env.DB.prepare("INSERT INTO comments (project_id,author_name,role,type,text,created_at) VALUES (?,?,?,?,?,?)")
           .bind(pid, author, user.role, "note", message, new Date().toISOString()).run();
+        saved = true;
       } catch (e) { console.error("notes: could not save comment", String(e && e.message || e)); }
       if (!env.RESEND_API_KEY) {
         console.log("notes: RESEND_API_KEY not set - email NOT sent (logged only)", JSON.stringify({ project: pid, to, cc, from, subject }));
-        return json({ ok: true, saved: true, emailed: false, note: "Saved. Your rep will see it in the lookbook." });
+        return json({ ok: saved, saved, emailed: false, note: "Saved. Your rep will see it in the lookbook." });
       }
       try {
         const payload = { from, to: [to], subject, text: textBody };
@@ -526,10 +528,10 @@ export async function onRequest(context) {
           body: JSON.stringify(payload),
         });
         if (!r.ok) console.error("notes: Resend send failed", r.status, (await r.text().catch(() => "")).slice(0, 300));
-        return json({ ok: true, saved: true, emailed: r.ok, error: r.ok ? undefined : ("Saved, but the email could not be sent (" + r.status + ").") });
+        return json({ ok: saved || r.ok, saved, emailed: r.ok, error: r.ok ? undefined : ("Saved, but the email could not be sent (" + r.status + ").") });
       } catch (e) {
         console.error("notes: Resend error", String((e && e.message) || e));
-        return json({ ok: true, saved: true, emailed: false, error: "Saved, but the email could not be sent." });
+        return json({ ok: saved, saved, emailed: false, error: "Saved, but the email could not be sent." });
       }
     }
 
