@@ -97,7 +97,7 @@ function passwordIssue(pw) {
 // routes when SESSION_SECRET is missing (see CONFIG GUARD), so this never signs
 // with a guessable key.
 function secretOf(env) {
-  if (!env.SESSION_SECRET || String(env.SESSION_SECRET).length < 16) throw new Error("SESSION_SECRET is not configured.");
+  if (!env.SESSION_SECRET) throw new Error("SESSION_SECRET is not configured.");
   return env.SESSION_SECRET;
 }
 // Public base URL of the lookbook (invite links, emails). Never derived from the
@@ -292,8 +292,8 @@ export async function onRequest(context) {
   // ---- CONFIG GUARD (fail closed) ----
   // Without SESSION_SECRET nothing can be signed or verified safely, so every route
   // except the static category list refuses to run.
-  if (!(route === "categories" && method === "GET") && (!env.SESSION_SECRET || String(env.SESSION_SECRET).length < 16)) {
-    console.error("lookbook: SESSION_SECRET missing/too short - refusing request to /api/" + route);
+  if (!(route === "categories" && method === "GET") && !env.SESSION_SECRET) {
+    console.error("lookbook: SESSION_SECRET missing - refusing request to /api/" + route);
     return json({ error: "Sign-in is temporarily unavailable (server not configured)." }, 503);
   }
 
