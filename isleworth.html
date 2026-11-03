@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Instrument+Serif:ital@0;1&display=swap">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="/planview.js"></script>
 <style>
   :root{--bg:#060605;--bg2:#121110;--panel:#17150f;--panel2:#1c1a14;--line:#2a2720;
     --gold:#b99a63;--gold-2:#cbb488;--text:#efe9df;--muted:#9a9388;--green:#8fbf7f;--danger:#c76b5a;}
@@ -112,6 +113,14 @@
   .pd-assign{margin-top:6px}
   .pd-assign select{width:100%;background:#0f0e0b;border:1px solid var(--line);border-radius:6px;color:var(--text);padding:5px;font-size:11.5px}
   .pd-scrape{margin-top:10px;font-size:12px;color:var(--muted);line-height:1.5}
+  .room-plan{border:1px solid var(--line);border-radius:12px;background:var(--bg2);margin-bottom:16px;overflow:hidden}
+  .room-plan .rp-h{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .room-plan .rp-h .t{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold-2);font-weight:800}
+  .room-plan .rp-h .m{font-size:12px;color:var(--muted)}
+  .room-plan .rp-prev{cursor:zoom-in;padding:10px}
+  .room-plan .rp-key{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 14px 12px;font-size:12px;color:var(--text)}
+  .room-plan .rp-key span.k{display:inline-flex;align-items:center;gap:6px}
+  .room-plan .rp-key .pm-sym{width:20px;height:20px;border-width:1.5px}.room-plan .rp-key .pm-sym svg{width:12px;height:12px}
   .pd-matchchip{display:inline-block;background:#122f1c;color:#8fbf7f;border:1px solid #1e4a2e;border-radius:5px;padding:1px 6px;font-size:10.5px;margin:2px}
 </style></head>
 <body>
@@ -138,10 +147,12 @@
     <div class="room-title"><h2 id="roomName">—</h2>
       <span class="hint" id="roomHint">Hover a marker for products &amp; measurements</span>
       <span class="spacer"></span>
+      <button class="btn ghost" id="zoomDrawing" title="Open the drawing full screen with zoom, pan and Fit" style="display:none">&#x2922; Zoom drawing</button>
       <button class="icon del" id="delRoom" title="Delete room" style="display:none">✕ room</button>
     </div>
     <div class="placing-banner" id="placingBanner"><span id="placingText"></span>
       <button class="icon" id="placingCancel" style="margin-left:auto;color:var(--gold-2)">cancel</button></div>
+    <div class="room-plan" id="roomPlan" style="display:none"></div>
     <div class="drawing-box" id="drawingBox"></div>
     <div class="url-row" id="urlRow" style="display:none">
       <input class="inp" id="drawUrl" placeholder="Hosted drawing image URL (e.g. assets/loomis/great-room.jpg)">
@@ -206,7 +217,34 @@ async function api(path,opts={}){
   curRoom=DATA.rooms[0]&&DATA.rooms[0].id;
   renderAll();
   populateScopeSwitch();
+  loadPlanRooms();
 })();
+
+/* ---- room views from Plans edit: each room box drawn on a floor plan gives this room a
+   zoomable view of its part of the marked-up plan (opens fitted to the room; zoom out
+   or "Whole floor" to see the whole plan). ---- */
+var PLAN_ROOMS=[];
+async function loadPlanRooms(){ try{ PLAN_ROOMS=(await pmProjectRooms(PID)).rooms||[]; }catch(e){ PLAN_ROOMS=[]; } renderRoomPlan(); }
+function roomRegion(r){ if(!r) return null;
+  return PLAN_ROOMS.find(x=>x.room_id===r.id)||PLAN_ROOMS.find(x=>!x.room_id&&x.name&&x.name.toLowerCase()===String(r.name).toLowerCase())||null; }
+function openRoomPlan(){ const r=room(), rr=roomRegion(r); if(rr) pmOpenRoom(rr.item,rr.plan_key,rr.label,PID); }
+function renderRoomPlan(){
+  const el=document.getElementById('roomPlan'); if(!el) return;
+  const r=room(), rr=roomRegion(r);
+  const zb=document.getElementById('zoomDrawing'); if(zb){ zb.style.display=(r&&r.drawing_url)?'':'none'; zb.onclick=()=>openFloorView(r.drawing_url,r.name+' — drawing',{project:PID}); }
+  if(!rr){ el.style.display='none'; el.innerHTML=''; return; }
+  const items=(rr.markup.data.items||[]).filter(it=>it.t!=='room');
+  const counts=pmCounts(items,rr.item);
+  el.style.display='';
+  el.innerHTML=`<div class="rp-h"><span class="t">Plan markup</span><span class="m">${esc(rr.label||'Floor plan')}${rr.markup.updated_at?' · saved '+esc(new Date(rr.markup.updated_at).toLocaleDateString())+(rr.markup.updated_by?' by '+esc(rr.markup.updated_by):''):''}</span>
+      <span class="spacer"></span><button class="btn" id="openRoomPlan">&#x2922; Open room view (zoom)</button></div>
+    <div class="rp-prev" id="rpPrev" title="Open room view"></div>
+    ${counts.length?`<div class="rp-key">${counts.map(c=>`<span class="k">${pmSymHTML(c.leg)} ${esc(c.leg.name)} <b>${c.n}</b></span>`).join('')}</div>`:''}`;
+  pmRenderStatic(document.getElementById('rpPrev'),rr.plan_key,items,rr.item);
+  document.getElementById('openRoomPlan').onclick=openRoomPlan;
+  document.getElementById('rpPrev').onclick=openRoomPlan;
+}
+window.addEventListener('pm:saved',()=>loadPlanRooms());
 
 // Part B: scope-project switcher — list all scope projects, switch via ?project=, or create.
 async function populateScopeSwitch(){
@@ -330,7 +368,7 @@ function startPlacing(id){ placing=id; selId=id; updateBanner(); renderCallouts(
 
 function floorsPresent(){
   const set=new Set(DATA.rooms.map(r=>r.floor).filter(Boolean));
-  return FLOOR_ORDER.filter(f=>set.has(f));
+  return [...FLOOR_ORDER.filter(f=>set.has(f)),...[...set].filter(f=>!FLOOR_ORDER.includes(f))];
 }
 function renderTabs(){
   // Floor filter row (All + each floor present).
@@ -418,7 +456,7 @@ function renderStats(){
     S(spaces,'spaces')+S(recessed,'recessed')+S(cove,'LF cove')+S(cabinetry,'LF cabinetry')+S(g2,'G2')+S(keypads,'keypads')+S(added,'added')+S(edited,'edited');
 }
 
-function renderAll(){ renderTabs(); const r=room(); scopeEl.value=r?r.scope_text||'':''; renderLineItems(); renderStats(); renderCallouts(); renderDrawing(); updateBanner(); }
+function renderAll(){ renderTabs(); const r=room(); scopeEl.value=r?r.scope_text||'':''; renderLineItems(); renderStats(); renderCallouts(); renderDrawing(); updateBanner(); if(typeof renderRoomPlan==='function') renderRoomPlan(); }
 window.addEventListener('beforeunload',()=>{ if(dirty){ try{ navigator.sendBeacon; }catch(e){} } });
 
 /* ================= PDF plan drop zone: render + scrape + assign ================= */

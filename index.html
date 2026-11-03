@@ -432,6 +432,7 @@
     </div>
   </footer>
 
+<script src="/planview.js"></script>
 <script>
 /* ============================================================
    SESSION TOKEN (cookie-independent auth)
@@ -1243,23 +1244,11 @@ async function doLogout(){
   .dcard.dim{opacity:.55}
   .card{position:relative}
   .card.dim{opacity:.5}
-  .fv-ov{position:fixed;inset:0;background:rgba(8,8,6,.94);z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column}
-  .fv-ov.on{display:flex}
-  .fv-stage{position:relative;width:100%;height:100%;overflow:hidden;cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
-  .fv-stage.drag{cursor:grabbing}
-  .fv-stage img{position:absolute;top:50%;left:50%;transform-origin:center;transform:translate(-50%,-50%) scale(1);will-change:transform;user-select:none;-webkit-user-drag:none;max-width:none;pointer-events:none}
-  .fv-bar{position:absolute;top:14px;left:0;right:0;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px;z-index:3;pointer-events:none;padding:0 10px}
-  .fv-bar>*{pointer-events:auto}
-  .fv-title{color:var(--gold-2,#cbb488);font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:rgba(15,14,11,.75);padding:7px 14px;border-radius:999px}
-  .fv-btn{background:#0f0e0b;border:1px solid var(--gold,#b99a63);color:var(--gold-2,#cbb488);border-radius:8px;padding:7px 12px;font-size:14px;font-weight:700;cursor:pointer;min-height:36px;touch-action:manipulation}
-  .fv-btn.fv-fit{background:var(--gold,#b99a63);color:#1a150c}
-  .fv-hint{position:absolute;bottom:16px;left:0;right:0;text-align:center;color:#8c8678;font-size:12px;z-index:3;pointer-events:none;padding:0 12px}
-  @media (max-width:600px){
-    .fv-bar{top:10px;gap:8px}
-    .fv-title{order:-1;flex:0 0 100%;text-align:center;font-size:11.5px;padding:6px 10px;background:none}
-    .fv-btn{min-height:44px;min-width:44px;font-size:15px;padding:8px 12px}
-    .fv-hint{bottom:10px;font-size:11px}
-  }
+  .pr-grid{display:flex;flex-wrap:wrap;gap:10px}
+  .pr-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:var(--panel,#141210);border:1px solid var(--line,#2a2720);border-radius:10px;padding:11px 14px;cursor:pointer;color:var(--ivory,#efe9df);min-width:150px;text-align:left;font-family:inherit}
+  .pr-card:hover{border-color:var(--gold,#b99a63)}
+  .pr-nm{font-weight:800;font-size:14px}.pr-fl{font-size:11.5px;color:var(--muted,#9a9388)}
+  .pr-empty{color:var(--muted,#9a9388);font-size:13px;margin-top:26px;max-width:720px;line-height:1.5}
   .vis-ctl select{background:#0f0e0b;border:1px solid var(--gold,#b99a63);color:var(--gold-2,#cbb488);border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer}
   .pd-drop.drag .pcard-media{outline:2px dashed var(--gold,#b99a63);outline-offset:-6px}
   #notesWidget{position:fixed;right:0;bottom:0;z-index:250;display:flex;flex-direction:column;align-items:flex-end}
@@ -1358,120 +1347,7 @@ function projectFloors(){
   if(Array.isArray(cfgF)&&cfgF.length) return cfgF;
   return FLOORVIEWS[CUR_PID]||[];
 }
-/* Floor-plan viewer. FV.scale is relative to the image's natural pixel size;
-   FV.fit is the scale that shows the whole plan inside the visible area (between
-   the toolbar and the hint). Zoom range: 0.8x fit .. max(8, fit*2) so the plan can
-   always be seen whole and never shrinks to nothing. Wheel, trackpad pinch
-   (ctrl+wheel / Safari gesture events), and touch/pen pinch all zoom toward the
-   cursor or pinch center; one pointer pans. */
-let FV={scale:1,x:0,y:0,fit:1,min:1,max:8,cy:0,atFit:true,nw:0,nh:0,ptrs:new Map(),pinch:null,pan:null,gs:1};
-function fvStageBox(){
-  const st=document.getElementById('fvStage'); if(!st) return null;
-  const r=st.getBoundingClientRect();
-  const bar=document.querySelector('#fvOverlay .fv-bar'), hint=document.querySelector('#fvOverlay .fv-hint');
-  const top=bar?Math.max(0,bar.getBoundingClientRect().bottom-r.top)+8:12;
-  const bot=hint?Math.max(0,r.bottom-hint.getBoundingClientRect().top)+8:12;
-  return {r,top,bot,w:Math.max(40,r.width-24),h:Math.max(40,r.height-top-bot)};
-}
-function fvComputeFit(){
-  const im=document.getElementById('fvImg'), b=fvStageBox();
-  if(!im||!b||!im.naturalWidth) return false;
-  FV.nw=im.naturalWidth; FV.nh=im.naturalHeight;
-  FV.fit=Math.min(b.w/FV.nw,b.h/FV.nh);
-  FV.cy=(b.top-b.bot)/2;              // vertical offset that centers the plan in the visible area
-  FV.min=FV.fit*0.8;
-  FV.max=Math.max(8,FV.fit*2);
-  return true;
-}
-function fvClampPan(){
-  const b=fvStageBox(); if(!b||!FV.nw) return;
-  const hw=FV.nw*FV.scale/2, hh=FV.nh*FV.scale/2, keep=60;   // keep at least 60px of plan on screen
-  const mx=Math.max(0,b.r.width/2+hw-keep), my=Math.max(0,b.r.height/2+hh-keep);
-  FV.x=Math.max(-mx,Math.min(mx,FV.x)); FV.y=Math.max(-my,Math.min(my,FV.y));
-}
-function fvApply(){ const im=document.getElementById('fvImg'); if(im) im.style.transform=`translate(calc(-50% + ${FV.x}px), calc(-50% + ${FV.y}px)) scale(${FV.scale})`; }
-/* Zoom by factor k toward client point (cx,cy); defaults to the stage center. */
-function fvZoomAt(k,cx,cy){
-  const st=document.getElementById('fvStage'); if(!st) return;
-  const r=st.getBoundingClientRect();
-  const px=(cx==null?r.left+r.width/2:cx)-(r.left+r.width/2), py=(cy==null?r.top+r.height/2:cy)-(r.top+r.height/2);
-  const ns=Math.max(FV.min,Math.min(FV.max,FV.scale*k)); if(ns===FV.scale) return;
-  const f=ns/FV.scale;
-  FV.x=px-(px-FV.x)*f; FV.y=py-(py-FV.y)*f; FV.scale=ns; FV.atFit=false;
-  if(ns<=FV.fit*1.001){ FV.x=0; FV.y=FV.cy; }   // at or below fit: keep the whole plan centered
-  fvClampPan(); fvApply();
-}
-function fvZoom(dir){ fvZoomAt(dir>0?1.3:1/1.3); }
-function fvReset(){ if(!fvComputeFit()) return; FV.scale=FV.fit; FV.x=0; FV.y=FV.cy; FV.atFit=true; fvApply(); }
-function fvOnResize(){
-  const ov=document.getElementById('fvOverlay'); if(!ov||!ov.classList.contains('on')) return;
-  if(FV.atFit||FV.scale<=FV.fit){ fvReset(); return; }
-  if(fvComputeFit()){ FV.scale=Math.max(FV.min,Math.min(FV.max,FV.scale)); fvClampPan(); fvApply(); }
-}
-function fvInitStage(stage){
-  stage.addEventListener('wheel',e=>{
-    e.preventDefault();
-    let dy=e.deltaY; if(e.deltaMode===1) dy*=16; else if(e.deltaMode===2) dy*=stage.clientHeight;
-    // ctrlKey = trackpad pinch on Chrome/Edge/Firefox (small continuous deltas); otherwise wheel/scroll.
-    const k=Math.exp(-dy*(e.ctrlKey?0.01:0.0025));
-    fvZoomAt(Math.max(0.5,Math.min(2,k)),e.clientX,e.clientY);
-  },{passive:false});
-  // Desktop Safari trackpad pinch arrives as gesture events (not ctrl+wheel).
-  stage.addEventListener('gesturestart',e=>{e.preventDefault();FV.gs=1;});
-  stage.addEventListener('gesturechange',e=>{e.preventDefault(); if(FV.ptrs.size>=2) return; fvZoomAt(e.scale/FV.gs,e.clientX,e.clientY); FV.gs=e.scale;});
-  stage.addEventListener('gestureend',e=>{e.preventDefault();});
-  stage.addEventListener('dragstart',e=>e.preventDefault());
-  const startPinch=()=>{ const [a,b]=[...FV.ptrs.values()]; FV.pinch={d:Math.hypot(b.x-a.x,b.y-a.y)||1,mx:(a.x+b.x)/2,my:(a.y+b.y)/2}; FV.pan=null; };
-  stage.addEventListener('pointerdown',e=>{
-    if(e.pointerType==='mouse'&&e.button!==0) return;
-    try{stage.setPointerCapture(e.pointerId);}catch(_){}
-    FV.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(FV.ptrs.size===1){ FV.pan={sx:e.clientX-FV.x,sy:e.clientY-FV.y}; stage.classList.add('drag'); }
-    else if(FV.ptrs.size===2) startPinch();
-  });
-  stage.addEventListener('pointermove',e=>{
-    if(!FV.ptrs.has(e.pointerId)) return;
-    FV.ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
-    if(FV.ptrs.size>=2&&FV.pinch){
-      const [a,b]=[...FV.ptrs.values()];
-      const d=Math.hypot(b.x-a.x,b.y-a.y)||1, mx=(a.x+b.x)/2, my=(a.y+b.y)/2;
-      FV.x+=mx-FV.pinch.mx; FV.y+=my-FV.pinch.my; FV.atFit=false;   // two-finger drag pans
-      fvZoomAt(d/FV.pinch.d,mx,my); fvClampPan(); fvApply();
-      FV.pinch={d,mx,my};
-    } else if(FV.pan){
-      FV.x=e.clientX-FV.pan.sx; FV.y=e.clientY-FV.pan.sy; FV.atFit=false; fvClampPan(); fvApply();
-    }
-  });
-  const end=e=>{
-    if(!FV.ptrs.delete(e.pointerId)) return;
-    if(FV.ptrs.size===1){ const p=[...FV.ptrs.values()][0]; FV.pinch=null; FV.pan={sx:p.x-FV.x,sy:p.y-FV.y}; }
-    else if(FV.ptrs.size===0){ FV.pinch=null; FV.pan=null; stage.classList.remove('drag'); }
-  };
-  stage.addEventListener('pointerup',end); stage.addEventListener('pointercancel',end); stage.addEventListener('lostpointercapture',end);
-  window.addEventListener('resize',fvOnResize);
-  window.addEventListener('orientationchange',()=>setTimeout(fvOnResize,150));
-}
-function openFloorView(img,label){
-  let ov=document.getElementById('fvOverlay');
-  if(!ov){ ov=document.createElement('div'); ov.id='fvOverlay'; ov.className='fv-ov';
-    ov.innerHTML=`<div class="fv-bar"><button class="fv-btn" onclick="fvZoom(-1)" aria-label="Zoom out">&minus;</button>
-      <span class="fv-title" id="fvTitle"></span><button class="fv-btn" onclick="fvZoom(1)" aria-label="Zoom in">+</button>
-      <button class="fv-btn fv-fit" id="fvFitBtn" onclick="fvReset()">&#x2922; Fit whole plan</button><button class="fv-btn" onclick="closeFloorView()">&times; Close</button></div>
-      <div class="fv-stage" id="fvStage"><img id="fvImg" alt="" draggable="false"></div>
-      <div class="fv-hint">Scroll, pinch or +/&minus; to zoom · drag to pan · Esc to close</div>`;
-    document.body.appendChild(ov);
-    fvInitStage(ov.querySelector('#fvStage'));
-    ov.addEventListener('click',e=>{if(e.target===ov)closeFloorView();});
-    window.addEventListener('keydown',e=>{if(e.key==='Escape')closeFloorView();});
-  }
-  document.getElementById('fvTitle').textContent=label||'Floor plan';
-  const im=document.getElementById('fvImg');
-  FV.ptrs.clear(); FV.pinch=null; FV.pan=null; FV.nw=0;
-  im.onload=()=>{ im.style.opacity=''; fvReset(); };
-  ov.classList.add('on');
-  if(im.getAttribute('src')===img&&im.complete&&im.naturalWidth) fvReset(); else { im.style.opacity='0'; im.src=img; }
-}
-function closeFloorView(){ const ov=document.getElementById('fvOverlay'); if(ov)ov.classList.remove('on'); }
+/* Floor-plan viewer + Plans edit markup live in /planview.js (shared with the room tool). */
 
 async function openDashboard(pid, internal){
   CUR_PID=pid;
@@ -1548,10 +1424,28 @@ function renderPlans(internal){
         <div class="fi" style="font-size:32px">&#8682;</div><span style="font-size:12px;color:var(--muted);text-align:center;padding:0 14px;margin-top:6px">Drop a plans PDF here to auto-build rooms</span></div>
         <div class="pcard-body"><div class="pcard-brand">Internal</div><div class="pcard-title">Add / replace plans</div><div class="pcard-meta" id="plansDropStatus"><span>PDF &rarr; best-effort room mapping</span></div></div>
         <input type="file" id="plansFile" accept="application/pdf" style="display:none"></div>`:''}
-    </div>`;
+    </div>
+    <div id="planRooms" class="plan-rooms"></div>`;
   if(internal) initPlansDrop();
+  renderPlanRooms();
   window.scrollTo({top:0});
 }
+
+/* Room views built from the room boxes drawn in Plans edit (saved per floor plan). */
+async function renderPlanRooms(){
+  const box=document.getElementById('planRooms'); if(!box||typeof pmProjectRooms!=='function') return;
+  const pid=CUR_PID; const {rooms}=await pmProjectRooms(pid);
+  if(pid!==CUR_PID||!document.body.contains(box)) return;
+  const floors=projectFloors(); const order=k=>{ const i=floors.findIndex(f=>f.img===k); return i<0?99:i; };
+  rooms.sort((a,b)=>order(a.plan_key)-order(b.plan_key)||String(a.name).localeCompare(String(b.name)));
+  window.__planRooms=rooms;
+  box.innerHTML=rooms.length?`<div class="cat-head" style="margin-top:34px"><span class="eyebrow">Room views</span><h2 style="font-size:30px">Rooms on the plans</h2>
+      <p>Each room opens on its part of the marked-up floor plan — zoom out to see the whole floor.</p></div>
+    <div class="pr-grid">${rooms.map((r,i)=>`<button class="pr-card" onclick="openPlanRoom(${i})"><span class="pr-nm">${escapeHTML(r.name||'Room')}</span><span class="pr-fl">${escapeHTML(r.label||'')}</span></button>`).join('')}</div>`
+    :(CUR_INTERNAL?`<p class="pr-empty">Tip: open a floor plan and use <b>&#x270E; Plans edit</b> to place legend symbols, labels and notes, and drag <b>Room box</b> regions — rooms then get their own zoomable room view here and in the room-by-room review.</p>`:'');
+}
+function openPlanRoom(i){ const r=(window.__planRooms||[])[i]; if(r) pmOpenRoom(r.item,r.plan_key,r.label,CUR_PID); }
+window.addEventListener('pm:saved',()=>{ if(document.getElementById('planRooms')) renderPlanRooms(); });
 
 function initPlansDrop(){
   const card=document.getElementById('plansDrop'), input=document.getElementById('plansFile');

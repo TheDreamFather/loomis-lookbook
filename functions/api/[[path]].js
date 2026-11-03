@@ -248,6 +248,29 @@ function rowToScopeRoom(r){
     scope_text:r.scope_text||"", callouts:safeJSON(r.callouts,[]), line_items:safeJSON(r.line_items,[]), sort:r.sort||0,
     updated_at:r.updated_at, updated_by:r.updated_by||null };
 }
+// ---- Plans edit: validate a markup overlay (all coordinates normalised 0..1) ----
+function cleanMarkup(d) {
+  if (!d || typeof d !== "object" || !Array.isArray(d.items)) return null;
+  const n01 = (v) => { const x = Number(v); return Number.isFinite(x) ? Math.max(0, Math.min(1, Math.round(x * 100000) / 100000)) : null; };
+  const str = (v, m) => String(v == null ? "" : v).slice(0, m);
+  const color = (v) => (/^#[0-9a-fA-F]{6}$/.test(String(v || "")) ? String(v) : null);
+  const out = [];
+  for (const it of d.items.slice(0, 3000)) {
+    if (!it || typeof it !== "object") continue;
+    const x = n01(it.x), y = n01(it.y);
+    if (x === null || y === null) continue;
+    const id = str(it.id || ("m" + Math.random().toString(36).slice(2, 9)), 40);
+    if (it.t === "sym") out.push({ t: "sym", id, k: str(it.k, 60), x, y, s: str(it.s, 200) });
+    else if (it.t === "text") { const s = str(it.s, 500); if (s.trim()) out.push({ t: "text", id, x, y, s, c: color(it.c) || "#c0392b", z: Math.max(0.5, Math.min(4, Number(it.z) || 1)) }); }
+    else if (it.t === "note") { const s = str(it.s, 1000); if (s.trim()) out.push({ t: "note", id, x, y, s }); }
+    else if (it.t === "room") {
+      const w = n01(it.w), h = n01(it.h);
+      if (!w || !h || w < 0.005 || h < 0.005) continue;
+      out.push({ t: "room", id, x, y, w: Math.min(w, 1 - x), h: Math.min(h, 1 - y), room_id: str(it.room_id, 80) || null, name: str(it.name, 120) });
+    }
+  }
+  return { items: out };
+}
 function canEditScope(user){ return isTeam(user); }
 async function makeInviteToken(secret, userId, ttlMs){
   const exp = Date.now() + (ttlMs || 7*24*60*60*1000);
@@ -914,6 +937,110 @@ export async function onRequest(context) {
         n = (r.meta && r.meta.changes) || 0;
       }
       return json({ ok: true, assigned: n });
+    }
+
+
+    // ---- Plans edit: legend + per-plan markup overlays (tables from migrations/0001_plans_edit.sql) ----
+    if (route.startsWith("plans/")) {
+      const user = await currentUser(context);
+      if (!user) return json({ error: "Please sign in." }, 401);
+      const who = user.name || user.last_name;
+      const missing = (e) => /no such table/i.test(String((e && e.message) || e));
+      const notMigrated = () => json({ error: "Plans edit is not set up on this database yet (run migrations/0001_plans_edit.sql).", not_migrated: true }, 503);
+      try {
+        if (route === "plans/legend" && method === "GET") {
+          const { results } = await env.DB.prepare("SELECT id,name,color,icon,sort FROM plan_legend WHERE active=1 ORDER BY sort ASC, name ASC").all();
+          return json({ items: results || [], can_edit: isTeam(user) }, 200, { "cache-control": "no-store" });
+        }
+        if (route === "plans/legend" && method === "POST") {
+          if (!isTeam(user)) return json({ error: "View-only." }, 403);
+          const b = await request.json().catch(() => ({}));
+          const name = String(b.name || "").trim().slice(0, 60);
+          const color = String(b.color || "").trim();
+          const icon = String(b.icon || "").trim().slice(0, 24);
+          if (!name) return json({ error: "Name required." }, 400);
+          if (!/^#[0-9a-fA-F]{6}$/.test(color)) return json({ error: "Colour must be #rrggbb." }, 400);
+          if (!/^(text:[A-Za-z0-9+#&-]{1,3}|[a-z0-9-]{1,20})$/.test(icon)) return json({ error: "Unknown icon." }, 400);
+          const now = new Date().toISOString();
+          let id = String(b.id || "").trim();
+          if (id) {
+            const r = await env.DB.prepare("UPDATE plan_legend SET name=?,color=?,icon=? WHERE id=?").bind(name, color, icon, id).run();
+            if (!((r.meta && r.meta.changes) || 0)) return json({ error: "Legend item not found." }, 404);
+          } else {
+            id = "lg-" + slugify(name).slice(0, 30) + "-" + Date.now().toString(36);
+            const mx = await env.DB.prepare("SELECT COALESCE(MAX(sort),0) AS m FROM plan_legend").first();
+            await env.DB.prepare("INSERT INTO plan_legend (id,name,color,icon,sort,active,created_at,created_by) VALUES (?,?,?,?,?,1,?,?)")
+              .bind(id, name, color, icon, ((mx && mx.m) || 0) + 10, now, who).run();
+          }
+          return json({ ok: true, id });
+        }
+        if (route === "plans/legend" && method === "DELETE") {
+          if (!isTeam(user)) return json({ error: "View-only." }, 403);
+          const id = (url.searchParams.get("id") || "").trim();
+          // Soft delete so symbols already placed with this item still render.
+          await env.DB.prepare("UPDATE plan_legend SET active=0 WHERE id=?").bind(id).run();
+          return json({ ok: true });
+        }
+        if (route === "plans/markups" && method === "GET") {
+          const pid = (url.searchParams.get("project") || "").trim();
+          if (!canView(user, pid)) return json({ error: "No access to this project." }, 403);
+          const { results } = await env.DB.prepare("SELECT plan_key,label,data,version,updated_at,updated_by FROM plan_markups WHERE project_id=?").bind(pid).all();
+          return json({ markups: (results || []).map((r) => ({ ...r, data: safeJSON(r.data, { items: [] }) })), can_edit: isTeam(user) }, 200, { "cache-control": "no-store" });
+        }
+        if (route === "plans/markup" && method === "GET") {
+          const pid = (url.searchParams.get("project") || "").trim();
+          const key = (url.searchParams.get("plan") || "").trim();
+          if (!canView(user, pid)) return json({ error: "No access to this project." }, 403);
+          const r = await env.DB.prepare("SELECT plan_key,label,data,version,updated_at,updated_by FROM plan_markups WHERE project_id=? AND plan_key=?").bind(pid, key).first();
+          let history = [];
+          if (isTeam(user)) {
+            const h = await env.DB.prepare("SELECT version,saved_at,saved_by FROM plan_markup_history WHERE project_id=? AND plan_key=? ORDER BY version DESC LIMIT 25").bind(pid, key).all();
+            history = h.results || [];
+          }
+          return json({ markup: r ? { ...r, data: safeJSON(r.data, { items: [] }) } : null, history, can_edit: isTeam(user) }, 200, { "cache-control": "no-store" });
+        }
+        if ((route === "plans/markup" && method === "PUT") || (route === "plans/markup/restore" && method === "POST")) {
+          if (!isTeam(user)) return json({ error: "View-only — ask a BLS team member to edit." }, 403);
+          const b = await request.json().catch(() => ({}));
+          const pid = String(b.project || "").trim();
+          const key = String(b.plan || "").trim().slice(0, 1000);
+          if (!pid || !key) return json({ error: "project and plan required." }, 400);
+          const proj = await env.DB.prepare("SELECT id FROM scope_projects WHERE id=?").bind(pid).first();
+          if (!proj) return json({ error: "Project not found." }, 404);
+          const cur = await env.DB.prepare("SELECT data,version,label FROM plan_markups WHERE project_id=? AND plan_key=?").bind(pid, key).first();
+          let data;
+          if (route === "plans/markup/restore") {
+            const h = await env.DB.prepare("SELECT data FROM plan_markup_history WHERE project_id=? AND plan_key=? AND version=?").bind(pid, key, Number(b.version) || 0).first();
+            if (!h) return json({ error: "That version is no longer kept." }, 404);
+            data = safeJSON(h.data, { items: [] });
+          } else {
+            const curV = cur ? cur.version : 0;
+            if (b.base_version !== undefined && b.base_version !== null && Number(b.base_version) !== curV) {
+              return json({ error: "Someone else saved this plan since you opened it. Reload to see their changes.", conflict: true, version: curV }, 409);
+            }
+            data = b.data;
+          }
+          const clean = cleanMarkup(data);
+          if (!clean) return json({ error: "Invalid markup." }, 400);
+          const text = JSON.stringify(clean);
+          if (text.length > 400000) return json({ error: "Markup too large." }, 413);
+          const now = new Date().toISOString();
+          const nextV = (cur ? cur.version : 0) + 1;
+          const label = String(b.label || (cur && cur.label) || "").slice(0, 120);
+          const stmts = [];
+          if (cur) stmts.push(env.DB.prepare("INSERT INTO plan_markup_history (project_id,plan_key,version,data,saved_at,saved_by) VALUES (?,?,?,?,?,?)").bind(pid, key, cur.version, cur.data, now, who));
+          stmts.push(env.DB.prepare(`INSERT INTO plan_markups (project_id,plan_key,label,data,version,updated_at,updated_by) VALUES (?,?,?,?,?,?,?)
+              ON CONFLICT(project_id,plan_key) DO UPDATE SET label=excluded.label,data=excluded.data,version=excluded.version,updated_at=excluded.updated_at,updated_by=excluded.updated_by`)
+            .bind(pid, key, label, text, nextV, now, who));
+          stmts.push(env.DB.prepare(`DELETE FROM plan_markup_history WHERE project_id=? AND plan_key=? AND id NOT IN
+              (SELECT id FROM plan_markup_history WHERE project_id=? AND plan_key=? ORDER BY version DESC LIMIT 25)`).bind(pid, key, pid, key));
+          await env.DB.batch(stmts);
+          return json({ ok: true, version: nextV, updated_at: now, updated_by: who, data: clean });
+        }
+      } catch (e) {
+        if (missing(e)) return notMigrated();
+        throw e;
+      }
     }
 
     return json({ error: "Not found." }, 404);
