@@ -15,6 +15,12 @@
      {t:'text', x,y, s, c:colour, z:size}  free text label
      {t:'note', x,y, s}                    sticky note
      {t:'room', x,y,w,h, room_id, name}    room region (drives room views)
+     {t:'erase', m:'rect'|'brush', x,y,w,h, c:fill, pts,sw,ar}
+                                           opaque patch that hides something printed on
+                                           the plan (x,y = top-left). Brush: pts are
+                                           [fx,fy] fractions of the box, sw = stroke width
+                                           as a fraction of the image width, ar = h/w of
+                                           the image. Drawn above the image, below the rest.
    The plan image is never modified. Only team (admin/sales) can edit; the
    server enforces this too.
    =================================================================== */
@@ -47,6 +53,7 @@ const PM_ICON_NAMES={recessed:'Recessed light',pendant:'Pendant',sconce:'Sconce'
 // Same rows as migrations/0001_plans_edit.sql — used only if the legend table isn't there yet.
 const PM_DEFAULT_LEGEND=[['lg-recessed','Recessed light','#f2c14e','recessed'],['lg-pendant','Decorative / pendant','#e8913d','pendant'],['lg-speaker','In-ceiling speaker','#4aa3df','speaker'],['lg-sub','Subwoofer','#2e6fa8','sub'],['lg-tv','TV / display','#9b6cd6','tv'],['lg-wap','Wi-Fi access point','#31b6a6','wap'],['lg-camera','Camera','#e05a5a','camera'],['lg-keypad','Keypad / switch','#c9b27c','keypad'],['lg-motion','Motion / occupancy sensor','#f08bb4','motion'],['lg-shade','Motorized shade','#8fbf7f','shade'],['lg-outlet','Outlet','#ff8c42','outlet'],['lg-data','Data / network drop','#5ad1e6','data'],['lg-thermostat','Thermostat','#b3d465','thermostat'],['lg-doorbell','Video doorbell / intercom','#c78bf0','doorbell'],['lg-rack','Equipment rack','#a8a8a8','rack']].map((a,i)=>({id:a[0],name:a[1],color:a[2],icon:a[3],sort:(i+1)*10}));
 const PM_TEXT_COLORS=['#c0392b','#1f5fbf','#1e8449','#111111','#d35400','#7d3c98'];
+const PM_ERASE_COLORS=[['#ffffff','White (paper)'],['#f4f1ea','Off-white'],['#e6e6e6','Light grey'],['#000000','Black']];
 
 function pmEsc(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function pmClamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
@@ -114,6 +121,22 @@ function pmCurProject(){
   .fv-ov:not(.editing) .pm-room{border-width:calc(1.5px * var(--inv));background:transparent}
   .fv-ov:not(.editing) .pm-rl{background:rgba(61,165,255,.85)}
   .fv-ov.roommode .pm-room{display:none}
+  .pm-er{position:absolute;pointer-events:none;box-sizing:border-box}
+  .pm-er svg{position:absolute;inset:0;width:100%;height:100%;display:block;overflow:visible}
+  .fv-ov.editing .pm-er{pointer-events:auto;outline:calc(1px * var(--inv)) dashed rgba(224,90,90,.75)}
+  .fv-ov.editing.tool-erase .pm-er{pointer-events:none}
+  .pm-er.sel{outline:calc(2px * var(--inv)) solid #3da5ff!important}
+  .pm-er .pm-rh{border-color:#e05a5a}
+  .fv-ov.editing.tool-erase .fv-stage{cursor:crosshair}
+  .pm-del{position:absolute;z-index:3;transform-origin:0 0;transform:scale(var(--inv)) translate(6px,-100%);width:34px;height:34px;border-radius:50%;border:2px solid #fff;background:#d64541;color:#fff;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,.45);cursor:pointer;pointer-events:auto;touch-action:none;padding:0}
+  .pm-del svg{width:18px;height:18px}
+  .pm-eopts{display:none;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:1px solid #2a2720;font-size:12px;color:#9a9388}
+  .pm-eopts.on{display:flex}
+  .pm-eopts input[type=range]{flex:1;min-width:90px;accent-color:#3da5ff}
+  .pm-eopts input[type=color]{width:30px;height:26px;padding:0;border:1px solid #3a352a;background:none;border-radius:5px}
+  .pm-esw{width:24px;height:24px;border-radius:5px;border:2px solid #3a352a;cursor:pointer;padding:0}
+  .pm-esw.on{border-color:#3da5ff;box-shadow:0 0 0 2px #10263a}
+  .pm-tb.danger{color:#e07a6a}
   .pm-focus{position:absolute;pointer-events:none;box-shadow:0 0 0 200000px rgba(6,6,5,.6);outline:calc(2px * var(--inv)) solid #cbb488}
   .pm-draft{position:absolute;border:calc(2px * var(--inv)) solid #3da5ff;background:rgba(61,165,255,.18);pointer-events:none}
   /* edit panel (legend + tools) */
@@ -170,6 +193,8 @@ function pmCurProject(){
     .pm-lg .nm{font-size:10.5px;white-space:normal;text-align:center;line-height:1.15;max-height:2.4em}
     .pm-lg .ct{display:none}
     .pm-tb{min-height:40px}
+    .pm-del{width:40px;height:40px}
+    .pm-eopts{padding:6px 10px}
     .pm-insp{left:0;right:0;width:auto;top:auto;bottom:0;max-height:46%;overflow:auto;border-radius:14px 14px 0 0;z-index:9;box-sizing:border-box}
     .pm-key{left:8px;right:8px;width:auto;bottom:40px}
   }`;
@@ -211,6 +236,7 @@ function fvApply(){
   if(FV.nw){ ly.style.width=FV.nw+'px'; ly.style.height=FV.nh+'px'; }
   ly.style.transform=`translate(calc(-50% + ${FV.x}px), calc(-50% + ${FV.y}px)) scale(${FV.scale})`;
   ly.style.setProperty('--inv',String(1/FV.scale));
+  if(PM.edit&&PM.sel) pmPosDel();
 }
 /* Zoom by factor k toward client point (cx,cy); defaults to the stage center. */
 function fvZoomAt(k,cx,cy){
@@ -347,7 +373,8 @@ function closeFloorView(){
 /* ---------------- markup state ---------------- */
 const PM={project:null,plan:null,label:'',room:null,legend:[],lmap:{},legendReady:null,notMigrated:false,
   data:{items:[]},saved:'{"items":[]}',version:0,canEdit:false,history:[],edit:false,tool:'select',sel:null,dirty:false,
-  undo:[],redo:[],rooms:null,drag:null,draw:null,loadSeq:0,keyOpen:false};
+  undo:[],redo:[],rooms:null,drag:null,draw:null,loadSeq:0,keyOpen:false,
+  eraseMode:'rect',eraseColor:'#ffffff',brushPx:24};
 async function pmEnsureLegend(force){
   if(PM.legendReady&&!force) return PM.legendReady;
   PM.legendReady=(async()=>{
@@ -390,26 +417,55 @@ function pmItemHTML(it){
     return `<div class="pm-it pm-s${sel}" data-id="${pmEsc(it.id)}" style="${pos}" title="${pmEsc((l?l.name:'Symbol')+(it.s?' — '+it.s:''))}">${pmSymHTML(l)}${it.s?`<span class="pm-cap">${pmEsc(it.s)}</span>`:''}</div>`; }
   if(it.t==='text') return `<div class="pm-it pm-t${sel}" data-id="${pmEsc(it.id)}" style="${pos};color:${pmEsc(it.c||'#c0392b')};--z:${Number(it.z)||1}">${pmEsc(it.s)}</div>`;
   if(it.t==='note') return `<div class="pm-it pm-n${sel}" data-id="${pmEsc(it.id)}" style="${pos}">${pmEsc(it.s)}</div>`;
+  if(it.t==='erase') return pmEraseHTML(it,sel);
   if(it.t==='room'){ const nm=pmRoomName(it);
     return `<div class="pm-room${sel}${it.room_id||it.name?'':' unassigned'}" data-rid="${pmEsc(it.id)}" style="left:${it.x*100}%;top:${it.y*100}%;width:${it.w*100}%;height:${it.h*100}%">
       <span class="pm-rl" data-id="${pmEsc(it.id)}">${pmEsc(nm||'Unassigned room')}</span>${PM.edit?`<span class="pm-rh" data-id="${pmEsc(it.id)}" data-h="1"></span>`:''}</div>`; }
   return '';
 }
+function pmBrushPath(pts,w,hh){
+  if(!pts||!pts.length) return '';
+  const P=p=>(p[0]*w).toFixed(5)+' '+(p[1]*hh).toFixed(5);
+  return 'M'+P(pts[0])+(pts.length===1?' L'+P(pts[0]):pts.slice(1).map(p=>' L'+P(p)).join(''));
+}
+function pmEraseHTML(it,sel){
+  const c=pmEsc(it.c||'#ffffff');
+  const box=`left:${it.x*100}%;top:${it.y*100}%;width:${it.w*100}%;height:${it.h*100}%`;
+  const hd=PM.edit&&sel?`<span class="pm-rh" data-id="${pmEsc(it.id)}" data-h="1"></span>`:'';
+  if(it.m==='brush'){ const ar=Number(it.ar)||1, hh=it.h*ar;
+    return `<div class="pm-er${sel}" data-id="${pmEsc(it.id)}" data-er="brush" style="${box}"><svg viewBox="0 0 ${it.w} ${hh}" preserveAspectRatio="none" aria-hidden="true"><path d="${pmBrushPath(it.pts,it.w,hh)}" fill="none" stroke="${c}" stroke-width="${Number(it.sw)||0.01}" stroke-linecap="round" stroke-linejoin="round"/></svg>${hd}</div>`; }
+  return `<div class="pm-er${sel}" data-id="${pmEsc(it.id)}" data-er="rect" style="${box};background:${c}">${hd}</div>`;
+}
+/* floating trash button next to the selected item (works without a keyboard) */
+function pmPosDel(){
+  const b=document.querySelector('#pmLayer .pm-del'); if(!b) return;
+  const it=PM.sel?pmItem(PM.sel):null; const ly=document.getElementById('fvLayer');
+  const el=it&&(it.t==='room'?document.querySelector(`#pmLayer [data-rid="${CSS.escape(it.id)}"]`):document.querySelector(`#pmLayer [data-id="${CSS.escape(it.id)}"]:not(.pm-rh):not(.pm-rl)`));
+  if(!el||!ly){ b.style.display='none'; return; }
+  const r=el.getBoundingClientRect(), L=ly.getBoundingClientRect(); if(!L.width) return;
+  b.style.display=''; b.style.left=((r.right-L.left)/L.width*100)+'%'; b.style.top=((r.top-L.top)/L.height*100)+'%';
+}
 function pmRender(){
   const ly=document.getElementById('pmLayer'); if(!ly) return;
   const items=PM.data.items||[];
   // rooms underneath, then notes/text, then symbols on top
-  const order={room:0,note:1,text:2,sym:3};
+  const order={erase:-1,room:0,note:1,text:2,sym:3};
   let html=items.slice().sort((a,b)=>(order[a.t]||0)-(order[b.t]||0)).map(pmItemHTML).join('');
   const R=FV.region; if(R) html+=`<div class="pm-focus" style="left:${R.x*100}%;top:${R.y*100}%;width:${R.w*100}%;height:${R.h*100}%"></div>`;
   if(PM.draw&&PM.draw.rect){ const d=PM.draw.rect; html+=`<div class="pm-draft" style="left:${d.x*100}%;top:${d.y*100}%;width:${d.w*100}%;height:${d.h*100}%"></div>`; }
+  if(PM.edit&&PM.sel&&pmItem(PM.sel)) html+=`<button class="pm-del" id="pmDelFloat" type="button" title="Delete this item" aria-label="Delete selected item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
   ly.innerHTML=html;
+  if(PM.edit&&PM.sel) pmPosDel();
 }
 function pmPlaceEl(it){
+  if(it.t==='erase'){ const el=document.querySelector(`#pmLayer .pm-er[data-id="${CSS.escape(it.id)}"]`); if(!el) return pmRender();
+    el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%'; el.style.width=it.w*100+'%'; el.style.height=it.h*100+'%';
+    if(it.m==='brush'){ const sv=el.querySelector('svg'), hh=it.h*(Number(it.ar)||1); sv.setAttribute('viewBox',`0 0 ${it.w} ${hh}`); sv.querySelector('path').setAttribute('d',pmBrushPath(it.pts,it.w,hh)); }
+    pmPosDel(); return; }
   if(it.t==='room'){ const el=document.querySelector(`#pmLayer [data-rid="${CSS.escape(it.id)}"]`); if(!el) return pmRender();
-    el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%'; el.style.width=it.w*100+'%'; el.style.height=it.h*100+'%'; return; }
+    el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%'; el.style.width=it.w*100+'%'; el.style.height=it.h*100+'%'; pmPosDel(); return; }
   const el=document.querySelector(`#pmLayer .pm-it[data-id="${CSS.escape(it.id)}"]`); if(!el) return pmRender();
-  el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%';
+  el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%'; pmPosDel();
 }
 function pmNorm(cx,cy){ const r=document.getElementById('fvLayer').getBoundingClientRect(); return {u:(cx-r.left)/r.width,v:(cy-r.top)/r.height}; }
 function pmToast(html,ms){ const t=document.getElementById('pmToast'); if(!t) return; t.innerHTML=html; t.classList.add('on'); clearTimeout(pmToast._t); pmToast._t=setTimeout(()=>t.classList.remove('on'),ms||2600); }
@@ -437,7 +493,7 @@ function pmEndEdit(discard){
   if(discard&&PM.dirty){ try{ PM.data=JSON.parse(PM.saved); }catch(e){} }
   PM.edit=false; PM.sel=null; PM.drag=null; PM.draw=null; PM.dirty=false;
   const ov=document.getElementById('fvOverlay'); if(!ov) return;
-  ov.classList.remove('editing','tool-place','tool-room');
+  ov.classList.remove('editing','tool-place','tool-room','tool-erase');
   document.getElementById('pmPanel').classList.remove('on'); document.getElementById('pmInsp').classList.remove('on');
   document.getElementById('pmEditBtn').hidden=!(PM.canEdit&&!FV.region);
   document.getElementById('pmKeyBtn').hidden=!pmCounts(PM.data.items).length;
@@ -447,7 +503,7 @@ function pmEndEdit(discard){
 function pmDone(){ if(PM.dirty&&!confirm('You have unsaved changes. Leave Plans edit and discard them?')) return; pmEndEdit(true); }
 function pmSetTool(t){
   PM.tool=t; const ov=document.getElementById('fvOverlay');
-  ov.classList.toggle('tool-place',t.indexOf('sym:')===0||t==='text'||t==='note'); ov.classList.toggle('tool-room',t==='room');
+  ov.classList.toggle('tool-place',t.indexOf('sym:')===0||t==='text'||t==='note'); ov.classList.toggle('tool-room',t==='room'); ov.classList.toggle('tool-erase',t==='erase');
   pmRenderPanel();
 }
 function pmSnapshot(){ PM.undo.push(JSON.stringify(PM.data)); if(PM.undo.length>60) PM.undo.shift(); PM.redo=[]; }
@@ -461,6 +517,8 @@ function pmStatus(msg,cls){
   else { s.textContent=PM.version?('Saved · v'+PM.version):'Not saved yet'; s.className='pm-status'; }
   const u=document.getElementById('pmUndo'), r=document.getElementById('pmRedo'), sv=document.getElementById('pmSave');
   if(u) u.disabled=!PM.undo.length; if(r) r.disabled=!PM.redo.length; if(sv) sv.disabled=!PM.dirty;
+  const ds=document.getElementById('pmDelSel'), cl=document.getElementById('pmClear');
+  if(ds) ds.disabled=!(PM.sel&&pmItem(PM.sel)); if(cl) cl.disabled=!(PM.data.items||[]).length;
 }
 function pmUpdateCounts(){ const c={}; (PM.data.items||[]).forEach(it=>{ if(it.t==='sym') c[it.k]=(c[it.k]||0)+1; });
   document.querySelectorAll('#pmPanel .pm-lg[data-k]').forEach(b=>{ const ct=b.querySelector('.ct'); if(ct) ct.textContent=c[b.dataset.k]||''; }); }
@@ -470,8 +528,13 @@ function pmRenderPanel(){
   const T=(t,lbl,title)=>`<button class="pm-tb${PM.tool===t?' on':''}" data-tool="${t}" title="${title||''}">${lbl}</button>`;
   const hist=(PM.history||[]).map(h=>`<option value="${h.version}">v${h.version} · ${pmEsc(new Date(h.saved_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</option>`).join('');
   p.innerHTML=`<div class="pm-ph"><b>Plans edit</b><span class="pm-status" id="pmStatus"></span></div>
-    <div class="pm-tools">${T('select','&#x2196; Select / move','Select, drag to move')}${T('text','T&nbsp;Text','Tap the plan to add a text label')}${T('note','&#x1F5C8; Note','Tap the plan to add a note')}${T('room','&#x25AD; Room box','Drag a box around a room, then pick the room')}
-      <button class="pm-tb" id="pmUndo" onclick="pmUndo()" title="Undo (Ctrl+Z)">&#x21B6;</button><button class="pm-tb" id="pmRedo" onclick="pmRedo()" title="Redo">&#x21B7;</button></div>
+    <div class="pm-tools">${T('select','&#x2196; Select / move','Select, drag to move')}${T('text','T&nbsp;Text','Tap the plan to add a text label')}${T('note','&#x1F5C8; Note','Tap the plan to add a note')}${T('room','&#x25AD; Room box','Drag a box around a room, then pick the room')}${T('erase','&#x232B; Erase','Cover something printed on the plan with a patch')}
+      <button class="pm-tb" id="pmUndo" onclick="pmUndo()" title="Undo (Ctrl+Z)">&#x21B6;</button><button class="pm-tb" id="pmRedo" onclick="pmRedo()" title="Redo">&#x21B7;</button><button class="pm-tb danger" id="pmDelSel" onclick="pmDelete()" title="Delete the selected item (Del)">&#x1F5D1; Delete</button></div>
+    <div class="pm-eopts${PM.tool==='erase'?' on':''}" id="pmEopts">
+      <button class="pm-tb${PM.eraseMode==='rect'?' on':''}" data-em="rect" title="Drag a rectangle">&#x25AD; Box</button><button class="pm-tb${PM.eraseMode==='brush'?' on':''}" data-em="brush" title="Paint over it">&#x1F58C; Brush</button>
+      <span id="pmBrushRow" style="display:${PM.eraseMode==='brush'?'flex':'none'};align-items:center;gap:6px;flex:1 1 100%">Size<input type="range" id="pmBrush" min="4" max="90" step="1" value="${PM.brushPx}"><span id="pmBrushV">${PM.brushPx}px</span></span>
+      <span style="flex:1 1 100%;display:flex;gap:6px;align-items:center">Fill ${PM_ERASE_COLORS.map(([c,n])=>`<button class="pm-esw${PM.eraseColor===c?' on':''}" data-ec="${c}" title="${n}" style="background:${c}"></button>`).join('')}<input type="color" id="pmEraseC" value="${PM.eraseColor}" title="Pick any fill colour"></span>
+      <span style="flex:1 1 100%">${PM.eraseMode==='brush'?'Paint over printed marks to hide them.':'Drag a box over printed marks to hide them.'} The original plan file is never changed.</span></div>
     <div class="pm-lh"><span>Legend · tap, then tap the plan</span><button onclick="pmToggleAdd()">+ Add</button></div>
     <div class="pm-leg">${PM.legend.map(l=>`<button class="pm-lg${PM.tool==='sym:'+l.id?' on':''}" data-k="${pmEsc(l.id)}" title="${pmEsc(l.name)}">${pmSymHTML(l)}<span class="nm">${pmEsc(l.name)}</span><span class="ct"></span></button>`).join('')}</div>
     <div class="pm-add" id="pmAdd"><input id="pmAddName" placeholder="Legend name (e.g. Ceiling fan)" style="flex:1 1 100%">
@@ -479,8 +542,12 @@ function pmRenderPanel(){
       <input id="pmAddLetters" placeholder="AB" maxlength="3" style="width:52px;display:none">
       <button class="pm-tb primary" onclick="pmAddLegend()">Add to legend</button></div>
     <div class="pm-acts">${hist?`<select id="pmHist"><option value="">History…</option>${hist}</select><button class="pm-tb" onclick="pmRestore()" title="Restore the chosen version">Restore</button>`:''}
-      <span style="flex:1"></span><button class="pm-tb" onclick="pmDone()">Done</button><button class="pm-tb primary" id="pmSave" onclick="pmSave()">Save</button></div>`;
+      <button class="pm-tb danger" id="pmClear" onclick="pmClearAll()" title="Remove all markup on this plan">Clear all</button><span style="flex:1"></span><button class="pm-tb" onclick="pmDone()">Done</button><button class="pm-tb primary" id="pmSave" onclick="pmSave()">Save</button></div>`;
   p.querySelectorAll('[data-tool]').forEach(b=>b.onclick=()=>pmSetTool(b.dataset.tool));
+  p.querySelectorAll('[data-em]').forEach(b=>b.onclick=()=>{ PM.eraseMode=b.dataset.em; pmRenderPanel(); });
+  p.querySelectorAll('[data-ec]').forEach(b=>b.onclick=()=>{ PM.eraseColor=b.dataset.ec; pmRenderPanel(); });
+  const ec=document.getElementById('pmEraseC'); if(ec) ec.oninput=()=>{ PM.eraseColor=ec.value; p.querySelectorAll('.pm-esw').forEach(x=>x.classList.toggle('on',x.dataset.ec===ec.value)); };
+  const br=document.getElementById('pmBrush'); if(br) br.oninput=()=>{ PM.brushPx=Number(br.value)||24; document.getElementById('pmBrushV').textContent=PM.brushPx+'px'; };
   p.querySelectorAll('.pm-lg[data-k]').forEach(b=>b.onclick=()=>pmSetTool(PM.tool==='sym:'+b.dataset.k?'select':'sym:'+b.dataset.k));
   const ic=document.getElementById('pmAddIcon'); if(ic) ic.onchange=()=>{ document.getElementById('pmAddLetters').style.display=ic.value==='text'?'':'none'; };
   pmStatus(); pmUpdateCounts();
@@ -495,11 +562,16 @@ async function pmAddLegend(){
   catch(e){ alert(e.message); }
 }
 function pmAddItem(it){ pmSnapshot(); PM.data.items=PM.data.items||[]; PM.data.items.push(it); PM.sel=it.id; pmRender(); pmRenderInsp(); pmChanged(); }
-function pmDelete(id){ id=id||PM.sel; if(!id) return; pmSnapshot(); PM.data.items=PM.data.items.filter(i=>i.id!==id); if(PM.sel===id) PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); }
+function pmDelete(id){ id=id||PM.sel; if(!id||!pmItem(id)) return; pmSnapshot(); PM.data.items=PM.data.items.filter(i=>i.id!==id); if(PM.sel===id) PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmToast('Deleted · <a href="#" onclick="pmUndo();return false" style="color:#cbb488">Undo</a>',3000); }
+function pmClearAll(){
+  const n=(PM.data.items||[]).length; if(!n) return;
+  if(!confirm(`Clear all ${n} item${n>1?'s':''} on this plan (symbols, text, notes, erase patches and room boxes)?\n\nNothing is permanent until you press Save, and older versions stay in History.`)) return;
+  pmSnapshot(); PM.data.items=[]; PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmStatus(); pmStatus('Cleared — press Save to keep','dirty');
+}
 function pmSelect(id){
   const prev=PM.sel?pmItem(PM.sel):null;
   if(prev&&prev.id!==id&&(prev.t==='text'||prev.t==='note')&&!String(prev.s||'').trim()){ PM.data.items=PM.data.items.filter(i=>i!==prev); pmChanged(); }   // drop empty labels
-  PM.sel=id||null; pmRender(); pmRenderInsp();
+  PM.sel=id||null; pmRender(); pmRenderInsp(); pmStatus();
 }
 function pmRenderInsp(){
   const box=document.getElementById('pmInsp'); if(!box) return;
@@ -519,6 +591,13 @@ function pmRenderInsp(){
     box.querySelectorAll('.pm-sw').forEach(b=>b.onclick=()=>{ pmSnapshot(); it.c=b.dataset.c; pmRender(); pmRenderInsp(); pmChanged(); });
     const z=d=>{ pmSnapshot(); it.z=pmClamp(Math.round(((Number(it.z)||1)+d)*100)/100,0.5,4); pmRender(); pmChanged(); };
     if(document.getElementById('pmiZm')){ document.getElementById('pmiZm').onclick=()=>z(-0.25); document.getElementById('pmiZp').onclick=()=>z(0.25); }
+  } else if(it.t==='erase'){
+    box.innerHTML=`<label>Erase patch · ${it.m==='brush'?'brush':'box'}</label>
+      <div class="row">${PM_ERASE_COLORS.map(([c,n])=>`<button class="pm-esw${(it.c||'#ffffff')===c?' on':''}" data-c="${c}" title="${n}" style="background:${c}"></button>`).join('')}<input type="color" id="pmiC" value="${pmEsc(it.c||'#ffffff')}" title="Fill colour"></div>
+      <div style="font-size:11.5px;color:#9a9388">Hides what is printed underneath. Drag to move, corner square to resize.</div>
+      <div class="row">${del}<span style="flex:1"></span><button class="pm-tb" onclick="pmSelect(null)">Done</button></div>`;
+    box.querySelectorAll('.pm-esw').forEach(b=>b.onclick=()=>{ pmSnapshot(); it.c=b.dataset.c; pmRender(); pmRenderInsp(); pmChanged(); });
+    const ci=document.getElementById('pmiC'); ci.onfocus=()=>pmSnapshot(); ci.oninput=()=>{ it.c=ci.value; pmRender(); pmChanged(); };
   } else if(it.t==='room'){
     const rooms=PM.rooms||[];
     box.innerHTML=`<label>Room region</label><select id="pmiRoom"><option value="">— choose a room —</option>${rooms.map(r=>`<option value="${pmEsc(r.id)}"${r.id===it.room_id?' selected':''}>${pmEsc(r.name)}${r.floor?' · '+pmEsc(r.floor):''}</option>`).join('')}<option value="__new"${!it.room_id&&it.name?' selected':''}>+ New room…</option></select>
@@ -541,6 +620,15 @@ function pmFocusInsp(){ setTimeout(()=>{ const s=document.getElementById('pmiS')
 /* pointer hooks called by the viewer */
 function pmPointerDown(e){
   if(!PM.edit) return false;
+  if(e.target&&e.target.closest&&e.target.closest('#pmLayer .pm-del')){ PM.delTap=e.pointerId; return true; }
+  if(PM.tool==='erase'){
+    const n=pmNorm(e.clientX,e.clientY), L=document.getElementById('fvLayer').getBoundingClientRect();
+    const p0={u:pmClamp(n.u,0,1),v:pmClamp(n.v,0,1)};
+    PM.draw={pid:e.pointerId,erase:PM.eraseMode,n0:p0,rect:null,last:{x:e.clientX,y:e.clientY},pts:[p0],lastPx:{x:e.clientX,y:e.clientY},
+      sw:PM.brushPx/(L.width||1),ar:FV.nw?FV.nh/FV.nw:(L.height/(L.width||1))};
+    if(PM.eraseMode==='brush') pmBrushDraft();
+    return true;
+  }
   const el=e.target&&e.target.closest?e.target.closest('#pmLayer [data-id]'):null;
   if(el&&PM.tool!=='room'){
     const it=pmItem(el.dataset.id); if(!it) return false;
@@ -556,13 +644,26 @@ function pmPointerDown(e){
   }
   return false;
 }
+function pmBrushDraft(){
+  const g=PM.draw; if(!g) return; const ly=document.getElementById('pmLayer');
+  let d=ly.querySelector('.pm-bdraft');
+  if(!d){ d=document.createElementNS('http://www.w3.org/2000/svg','svg'); d.setAttribute('class','pm-bdraft'); d.setAttribute('preserveAspectRatio','none');
+    d.style.cssText='position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none';
+    d.innerHTML='<path fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-opacity=".85"/>'; ly.appendChild(d); }
+  d.setAttribute('viewBox',`0 0 1 ${g.ar}`);
+  const pa=d.firstChild; pa.setAttribute('stroke',PM.eraseColor); pa.setAttribute('stroke-width',g.sw);
+  pa.setAttribute('d',pmBrushPath(g.pts.map(p=>[p.u,p.v]),1,g.ar));
+  d.style.filter='drop-shadow(0 0 calc(1.5px * var(--inv)) rgba(224,90,90,.9))';
+}
 function pmGestureToPinch(){
+  PM.delTap=null;
   const g=PM.drag||PM.draw; if(!g) return;
   if(PM.drag&&PM.drag.moved){ PM.undo.push(PM.drag.snap); pmChanged(); }
   PM.drag=null; PM.draw=null; pmRender();
   FV.ptrs.set(g.pid,{x:g.last.x,y:g.last.y});
 }
 function pmGestureMove(e){
+  if(PM.delTap!=null&&PM.delTap===e.pointerId) return true;
   const g=PM.drag||PM.draw; if(!g||g.pid!==e.pointerId) return false;
   g.last={x:e.clientX,y:e.clientY};
   const n=pmNorm(e.clientX,e.clientY);
@@ -570,11 +671,14 @@ function pmGestureMove(e){
     if(!g.moved&&Math.hypot(e.clientX-g.sx,e.clientY-g.sy)<4) return true;
     g.moved=true; const it=pmItem(g.id); if(!it) return true;
     const du=n.u-g.n0.u, dv=n.v-g.n0.v;
-    if(it.t==='room'){
+    if(it.t==='room'||it.t==='erase'){
       if(g.mode==='resize'){ it.w=pmClamp(g.o.w+du,0.01,1-it.x); it.h=pmClamp(g.o.h+dv,0.01,1-it.y); }
       else { it.x=pmClamp(g.o.x+du,0,1-it.w); it.y=pmClamp(g.o.y+dv,0,1-it.h); }
     } else { it.x=pmClamp(g.o.x+du,0,1); it.y=pmClamp(g.o.y+dv,0,1); }
     pmPlaceEl(it);
+  } else if(g.erase==='brush'){
+    if(Math.hypot(e.clientX-g.lastPx.x,e.clientY-g.lastPx.y)<2.5) return true;   // thin out points
+    g.lastPx={x:e.clientX,y:e.clientY}; if(g.pts.length<2000) g.pts.push({u:pmClamp(n.u,0,1),v:pmClamp(n.v,0,1)}); pmBrushDraft();
   } else {
     const u=pmClamp(n.u,0,1), v=pmClamp(n.v,0,1);
     g.rect={x:Math.min(u,g.n0.u),y:Math.min(v,g.n0.v),w:Math.abs(u-g.n0.u),h:Math.abs(v-g.n0.v)};
@@ -585,12 +689,25 @@ function pmGestureMove(e){
   return true;
 }
 function pmGestureEnd(e){
+  if(PM.delTap!=null&&PM.delTap===e.pointerId){ PM.delTap=null; if(e.type==='pointerup') pmDelete(); return true; }
   const g=PM.drag||PM.draw; if(!g||g.pid!==e.pointerId) return false;
   if(PM.drag){ PM.drag=null; if(g.moved){ PM.undo.push(g.snap); if(PM.undo.length>60) PM.undo.shift(); PM.redo=[]; pmChanged(); }
     else { const it=pmItem(g.id); if(it&&(it.t==='text'||it.t==='note')) pmFocusInsp(); } }
+  else if(g.erase==='brush'){ PM.draw=null; pmBrushFinish(g); }
+  else if(g.erase){ PM.draw=null; const r=g.rect; pmRender();
+    if(r&&r.w>0.002&&r.h>0.002) pmAddItem({t:'erase',m:'rect',id:pmUid(),x:r.x,y:r.y,w:r.w,h:r.h,c:PM.eraseColor}); }
   else { PM.draw=null; const r=g.rect; pmRender();
     if(r&&r.w>0.01&&r.h>0.01){ pmAddItem({t:'room',id:pmUid(),x:r.x,y:r.y,w:r.w,h:r.h,room_id:null,name:''}); pmSetTool('select'); } }
   return true;
+}
+function pmBrushFinish(g){
+  const hw=g.sw/2, hv=g.sw/2/(g.ar||1);
+  let x0=1,y0=1,x1=0,y1=0; g.pts.forEach(p=>{ x0=Math.min(x0,p.u); y0=Math.min(y0,p.v); x1=Math.max(x1,p.u); y1=Math.max(y1,p.v); });
+  x0=Math.max(0,x0-hw); y0=Math.max(0,y0-hv); x1=Math.min(1,x1+hw); y1=Math.min(1,y1+hv);
+  const w=Math.max(1e-4,x1-x0), h=Math.max(1e-4,y1-y0);
+  const r4=v=>Math.round(v*10000)/10000;
+  const pts=g.pts.map(p=>[r4((p.u-x0)/w),r4((p.v-y0)/h)]);
+  pmAddItem({t:'erase',m:'brush',id:pmUid(),x:x0,y:y0,w,h,c:PM.eraseColor,pts,sw:g.sw,ar:g.ar});
 }
 function pmTap(cx,cy,e){
   const n=pmNorm(cx,cy); const inside=n.u>=0&&n.u<=1&&n.v>=0&&n.v<=1;

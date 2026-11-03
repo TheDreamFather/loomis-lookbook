@@ -263,6 +263,22 @@ function cleanMarkup(d) {
     if (it.t === "sym") out.push({ t: "sym", id, k: str(it.k, 60), x, y, s: str(it.s, 200) });
     else if (it.t === "text") { const s = str(it.s, 500); if (s.trim()) out.push({ t: "text", id, x, y, s, c: color(it.c) || "#c0392b", z: Math.max(0.5, Math.min(4, Number(it.z) || 1)) }); }
     else if (it.t === "note") { const s = str(it.s, 1000); if (s.trim()) out.push({ t: "note", id, x, y, s }); }
+    else if (it.t === "erase") {
+      // opaque patch covering something printed on the plan (the image itself is never changed)
+      const w = n01(it.w), h = n01(it.h);
+      if (!w || !h) continue;
+      const base = { t: "erase", id, x, y, w: Math.max(0.0001, Math.min(w, 1 - x)), h: Math.max(0.0001, Math.min(h, 1 - y)), c: color(it.c) || "#ffffff" };
+      if (it.m === "brush") {
+        const pts = (Array.isArray(it.pts) ? it.pts : []).slice(0, 2000)
+          .map((p) => Array.isArray(p) ? [n01(p[0]), n01(p[1])] : null)
+          .filter((p) => p && p[0] !== null && p[1] !== null)
+          .map((p) => [Math.round(p[0] * 10000) / 10000, Math.round(p[1] * 10000) / 10000]);
+        if (!pts.length) continue;
+        const sw = Math.max(0.0005, Math.min(0.25, Number(it.sw) || 0.01));
+        const ar = Math.max(0.05, Math.min(20, Number(it.ar) || 1));
+        out.push({ ...base, m: "brush", pts, sw, ar });
+      } else out.push({ ...base, m: "rect" });
+    }
     else if (it.t === "room") {
       const w = n01(it.w), h = n01(it.h);
       if (!w || !h || w < 0.005 || h < 0.005) continue;
