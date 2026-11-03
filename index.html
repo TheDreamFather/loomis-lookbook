@@ -1248,6 +1248,9 @@ async function doLogout(){
   .pr-card{display:flex;flex-direction:column;align-items:flex-start;gap:3px;background:var(--panel,#141210);border:1px solid var(--line,#2a2720);border-radius:10px;padding:11px 14px;cursor:pointer;color:var(--ivory,#efe9df);min-width:150px;text-align:left;font-family:inherit}
   .pr-card:hover{border-color:var(--gold,#b99a63)}
   .pr-nm{font-weight:800;font-size:14px}.pr-fl{font-size:11.5px;color:var(--muted,#9a9388)}
+  .pr-tot{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-top:30px;padding:12px 16px;background:var(--panel,#141210);border:1px solid var(--line,#2a2720);border-radius:10px;color:var(--ivory,#efe9df);font-size:13px}
+  .pr-tot .k{display:inline-flex;align-items:center;gap:6px}
+  .pr-tot .pm-sym{width:20px;height:20px;border-width:1.5px}.pr-tot .pm-sym svg{width:12px;height:12px}
   .pr-empty{color:var(--muted,#9a9388);font-size:13px;margin-top:26px;max-width:720px;line-height:1.5}
   .vis-ctl select{background:#0f0e0b;border:1px solid var(--gold,#b99a63);color:var(--gold-2,#cbb488);border-radius:7px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer}
   .pd-drop.drag .pcard-media{outline:2px dashed var(--gold,#b99a63);outline-offset:-6px}
@@ -1434,15 +1437,19 @@ function renderPlans(internal){
 /* Room views built from the room boxes drawn in Plans edit (saved per floor plan). */
 async function renderPlanRooms(){
   const box=document.getElementById('planRooms'); if(!box||typeof pmProjectRooms!=='function') return;
-  const pid=CUR_PID; const {rooms}=await pmProjectRooms(pid);
+  const pid=CUR_PID; const {rooms,markups}=await pmProjectRooms(pid);
   if(pid!==CUR_PID||!document.body.contains(box)) return;
   const floors=projectFloors(); const order=k=>{ const i=floors.findIndex(f=>f.img===k); return i<0?99:i; };
   rooms.sort((a,b)=>order(a.plan_key)-order(b.plan_key)||String(a.name).localeCompare(String(b.name)));
   window.__planRooms=rooms;
-  box.innerHTML=rooms.length?`<div class="cat-head" style="margin-top:34px"><span class="eyebrow">Room views</span><h2 style="font-size:30px">Rooms on the plans</h2>
+  const pc=pmProjCounts(markups), keys=Object.keys(pc).sort((a,b)=>((PM.lmap[a]||{}).sort||0)-((PM.lmap[b]||{}).sort||0));
+  const wacc={}; (markups||[]).forEach(m=>pmWireSummary(m.data,null,wacc)); const ws=Object.values(wacc);
+  const totals=keys.length?`<div class="pr-tot" id="planTotals"><span class="eyebrow" style="flex:0 0 100%">Device totals · all floors</span>${keys.map(k=>{ const l=PM.lmap[k]||{id:k,name:'(removed)',color:'#888888',icon:'dot'};
+      return `<span class="k">${pmSymHTML(l)} ${escapeHTML(l.name)} <b>${pc[k]}</b></span>`; }).join('')}${ws.length?`<span class="eyebrow" style="flex:0 0 100%;margin-top:6px">Wire runs</span>${ws.map(w=>`<span class="k"><i style="display:inline-block;width:18px;height:4px;border-radius:2px;background:${escapeHTML(w.c)}"></i>${escapeHTML(w.w)} <b>${w.runs}</b> <span style="opacity:.7">${pmFmtLen(w)}</span></span>`).join('')}`:''}</div>`:'';
+  box.innerHTML=totals+(rooms.length?`<div class="cat-head" style="margin-top:34px"><span class="eyebrow">Room views</span><h2 style="font-size:30px">Rooms on the plans</h2>
       <p>Each room opens on its part of the marked-up floor plan — zoom out to see the whole floor.</p></div>
     <div class="pr-grid">${rooms.map((r,i)=>`<button class="pr-card" onclick="openPlanRoom(${i})"><span class="pr-nm">${escapeHTML(r.name||'Room')}</span><span class="pr-fl">${escapeHTML(r.label||'')}</span></button>`).join('')}</div>`
-    :(CUR_INTERNAL?`<p class="pr-empty">Tip: open a floor plan and use <b>&#x270E; Plans edit</b> to place legend symbols, labels and notes, and drag <b>Room box</b> regions — rooms then get their own zoomable room view here and in the room-by-room review.</p>`:'');
+    :(CUR_INTERNAL?`<p class="pr-empty">Tip: open a floor plan and use <b>&#x270E; Plans edit</b> to place legend symbols, labels and notes, and drag <b>Room box</b> regions — rooms then get their own zoomable room view here and in the room-by-room review.</p>`:''));
 }
 function openPlanRoom(i){ const r=(window.__planRooms||[])[i]; if(r) pmOpenRoom(r.item,r.plan_key,r.label,CUR_PID); }
 window.addEventListener('pm:saved',()=>{ if(document.getElementById('planRooms')) renderPlanRooms(); });

@@ -121,6 +121,9 @@
   .room-plan .rp-key{display:flex;flex-wrap:wrap;gap:6px 14px;padding:0 14px 12px;font-size:12px;color:var(--text)}
   .room-plan .rp-key span.k{display:inline-flex;align-items:center;gap:6px}
   .room-plan .rp-key .pm-sym{width:20px;height:20px;border-width:1.5px}.room-plan .rp-key .pm-sym svg{width:12px;height:12px}
+  .room-plan .rp-key .lbl{flex:0 0 100%;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .room-plan .rp-key .pt{color:var(--muted);font-weight:400}
+  .room-plan .rp-key .wsw{display:inline-block;width:18px;height:4px;border-radius:2px}
   .pd-matchchip{display:inline-block;background:#122f1c;color:#8fbf7f;border:1px solid #1e4a2e;border-radius:5px;padding:1px 6px;font-size:10.5px;margin:2px}
 </style></head>
 <body>
@@ -223,8 +226,8 @@ async function api(path,opts={}){
 /* ---- room views from Plans edit: each room box drawn on a floor plan gives this room a
    zoomable view of its part of the marked-up plan (opens fitted to the room; zoom out
    or "Whole floor" to see the whole plan). ---- */
-var PLAN_ROOMS=[];
-async function loadPlanRooms(){ try{ PLAN_ROOMS=(await pmProjectRooms(PID)).rooms||[]; }catch(e){ PLAN_ROOMS=[]; } renderRoomPlan(); }
+var PLAN_ROOMS=[], PLAN_MARKUPS=[];
+async function loadPlanRooms(){ try{ const d=await pmProjectRooms(PID); PLAN_ROOMS=d.rooms||[]; PLAN_MARKUPS=d.markups||[]; }catch(e){ PLAN_ROOMS=[]; PLAN_MARKUPS=[]; } renderRoomPlan(); }
 function roomRegion(r){ if(!r) return null;
   return PLAN_ROOMS.find(x=>x.room_id===r.id)||PLAN_ROOMS.find(x=>!x.room_id&&x.name&&x.name.toLowerCase()===String(r.name).toLowerCase())||null; }
 function openRoomPlan(){ const r=room(), rr=roomRegion(r); if(rr) pmOpenRoom(rr.item,rr.plan_key,rr.label,PID); }
@@ -234,12 +237,13 @@ function renderRoomPlan(){
   const zb=document.getElementById('zoomDrawing'); if(zb){ zb.style.display=(r&&r.drawing_url)?'':'none'; zb.onclick=()=>openFloorView(r.drawing_url,r.name+' — drawing',{project:PID}); }
   if(!rr){ el.style.display='none'; el.innerHTML=''; return; }
   const items=(rr.markup.data.items||[]).filter(it=>it.t!=='room');
-  const counts=pmCounts(items,rr.item);
+  const counts=pmCounts(items,rr.item), proj=pmProjCounts(PLAN_MARKUPS), ws=pmWireSummary(rr.markup.data,rr.item);
   el.style.display='';
   el.innerHTML=`<div class="rp-h"><span class="t">Plan markup</span><span class="m">${esc(rr.label||'Floor plan')}${rr.markup.updated_at?' · saved '+esc(new Date(rr.markup.updated_at).toLocaleDateString())+(rr.markup.updated_by?' by '+esc(rr.markup.updated_by):''):''}</span>
       <span class="spacer"></span><button class="btn" id="openRoomPlan">&#x2922; Open room view (zoom)</button></div>
     <div class="rp-prev" id="rpPrev" title="Open room view"></div>
-    ${counts.length?`<div class="rp-key">${counts.map(c=>`<span class="k">${pmSymHTML(c.leg)} ${esc(c.leg.name)} <b>${c.n}</b></span>`).join('')}</div>`:''}`;
+    ${counts.length?`<div class="rp-key" id="rpCounts"><span class="lbl">Devices in this room <span class="pt">· / all floors</span></span>${counts.map(c=>`<span class="k" data-k="${esc(c.leg.id)}">${pmSymHTML(c.leg)} ${esc(c.leg.name)} <b>${c.n}</b><span class="pt">/ ${proj[c.leg.id]||c.n}</span></span>`).join('')}</div>`:''}
+    ${ws.length?`<div class="rp-key" id="rpWires"><span class="lbl">Wire runs through this room</span>${ws.map(w=>`<span class="k"><i class="wsw" style="background:${esc(w.c)}"></i>${esc(w.w)} <b>${w.runs} run${w.runs===1?'':'s'}</b><span class="pt">${pmFmtLen(w)}</span></span>`).join('')}</div>`:''}`;
   pmRenderStatic(document.getElementById('rpPrev'),rr.plan_key,items,rr.item);
   document.getElementById('openRoomPlan').onclick=openRoomPlan;
   document.getElementById('rpPrev').onclick=openRoomPlan;

@@ -15,6 +15,13 @@
      {t:'text', x,y, s, c:colour, z:size}  free text label
      {t:'note', x,y, s}                    sticky note
      {t:'room', x,y,w,h, room_id, name}    room region (drives room views)
+     {t:'wire', k:legendId, r:'home'|'pair'|'chain', w:wireLabel, c:colour,
+            n:[[x,y]...] anchors, d:[symbolId|null...], g:[[h|v, bend|null]...]}
+                                           a wiring run: right-angle legs between anchors
+                                           (device(s) ... source). Anchors follow their
+                                           symbols when they move; g = per-leg bend.
+     data.scale = {a:[x,y], b:[x,y], d:feet, u:'ft'}  two points a known distance apart
+     data.ar    = plan height / width (for lengths outside the viewer)
      {t:'erase', m:'rect'|'brush', x,y,w,h, c:fill, pts,sw,ar}
                                            opaque patch that hides something printed on
                                            the plan (x,y = top-left). Brush: pts are
@@ -40,6 +47,7 @@ const PM_ICONS={
   data:'<path d="M4 6h16l-8 13z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M12 9.5v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   thermostat:'<path d="M10 4a2 2 0 0 1 4 0v9.5a4 4 0 1 1-4 0z" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="17" r="1.8" fill="currentColor"/>',
   doorbell:'<path d="M6 16v-5a6 6 0 0 1 12 0v5l2 2H4z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M10 20.5h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+  breaker:'<rect x="5" y="3" width="14" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M13 6.5l-4 6h4l-2 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>',
   rack:'<rect x="5" y="3" width="14" height="18" rx="1.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 8h8M8 12h8M8 16h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
   fan:'<circle cx="12" cy="12" r="2" fill="currentColor"/><path d="M12 10c0-4 1-6 3-6s2 3-3 6zM14 12c4 0 6 1 6 3s-3 2-6-3zM12 14c0 4-1 6-3 6s-2-3 3-6zM10 12c-4 0-6-1-6-3s3-2 6 3z" fill="currentColor"/>',
   smoke:'<circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="2"/>',
@@ -49,9 +57,13 @@ const PM_ICONS={
   square:'<rect x="6" y="6" width="12" height="12" fill="currentColor"/>',
   diamond:'<path d="M12 3l9 9-9 9-9-9z" fill="currentColor"/>'
 };
-const PM_ICON_NAMES={recessed:'Recessed light',pendant:'Pendant',sconce:'Sconce',speaker:'Speaker',sub:'Subwoofer',tv:'TV',wap:'Wi-Fi AP',camera:'Camera',keypad:'Keypad',motion:'Motion sensor',shade:'Shade',outlet:'Outlet',data:'Data drop',thermostat:'Thermostat',doorbell:'Doorbell',rack:'Rack',fan:'Fan',smoke:'Smoke / CO',lock:'Lock',star:'Star',dot:'Dot',square:'Square',diamond:'Diamond'};
+const PM_ICON_NAMES={recessed:'Recessed light',pendant:'Pendant',sconce:'Sconce',speaker:'Speaker',sub:'Subwoofer',tv:'TV',wap:'Wi-Fi AP',camera:'Camera',keypad:'Keypad',motion:'Motion sensor',shade:'Shade',outlet:'Outlet',data:'Data drop',thermostat:'Thermostat',doorbell:'Doorbell',rack:'Rack',breaker:'Breaker / panel',fan:'Fan',smoke:'Smoke / CO',lock:'Lock',star:'Star',dot:'Dot',square:'Square',diamond:'Diamond'};
 // Same rows as migrations/0001_plans_edit.sql — used only if the legend table isn't there yet.
-const PM_DEFAULT_LEGEND=[['lg-recessed','Recessed light','#f2c14e','recessed'],['lg-pendant','Decorative / pendant','#e8913d','pendant'],['lg-speaker','In-ceiling speaker','#4aa3df','speaker'],['lg-sub','Subwoofer','#2e6fa8','sub'],['lg-tv','TV / display','#9b6cd6','tv'],['lg-wap','Wi-Fi access point','#31b6a6','wap'],['lg-camera','Camera','#e05a5a','camera'],['lg-keypad','Keypad / switch','#c9b27c','keypad'],['lg-motion','Motion / occupancy sensor','#f08bb4','motion'],['lg-shade','Motorized shade','#8fbf7f','shade'],['lg-outlet','Outlet','#ff8c42','outlet'],['lg-data','Data / network drop','#5ad1e6','data'],['lg-thermostat','Thermostat','#b3d465','thermostat'],['lg-doorbell','Video doorbell / intercom','#c78bf0','doorbell'],['lg-rack','Equipment rack','#a8a8a8','rack']].map((a,i)=>({id:a[0],name:a[1],color:a[2],icon:a[3],sort:(i+1)*10}));
+const PM_DEFAULT_LEGEND=[['lg-recessed','Recessed light','#f2c14e','recessed'],['lg-pendant','Decorative / pendant','#e8913d','pendant'],['lg-speaker','In-ceiling speaker','#4aa3df','speaker'],['lg-sub','Subwoofer','#2e6fa8','sub'],['lg-tv','TV / display','#9b6cd6','tv'],['lg-wap','Wi-Fi access point','#31b6a6','wap'],['lg-camera','Camera','#e05a5a','camera'],['lg-keypad','Keypad / switch','#c9b27c','keypad'],['lg-motion','Motion / occupancy sensor','#f08bb4','motion'],['lg-shade','Motorized shade','#8fbf7f','shade'],['lg-outlet','Outlet','#ff8c42','outlet'],['lg-data','Data / network drop','#5ad1e6','data'],['lg-thermostat','Thermostat','#b3d465','thermostat'],['lg-doorbell','Video doorbell / intercom','#c78bf0','doorbell'],['lg-rack','Rack / head-end','#a8a8a8','rack'],['lg-breaker','Breaker / panel','#6f7d8c','breaker']].map((a,i)=>({id:a[0],name:a[1],color:a[2],icon:a[3],sort:(i+1)*10,wiring:null}));
+// Default wiring rules (same JSON as the plan_legend.wiring seed values) — used when a row has none.
+const PM_DEFAULT_WIRING={"lg-recessed":{"rule":"chain","to":"panel","wire":"14/2 · Lutron lighting","color":"#d49a00"},"lg-pendant":{"rule":"chain","to":"panel","wire":"14/2 · Lutron lighting","color":"#d49a00"},"lg-speaker":{"rule":"pair","to":"rack","wire":"16/4 speaker","color":"#2f7fd0"},"lg-sub":{"rule":"none"},"lg-tv":{"rule":"home","to":"rack","wire":"Cat6 + HDMI","color":"#7d4fc4"},"lg-wap":{"rule":"home","to":"rack","wire":"Cat6","color":"#179c8c"},"lg-camera":{"rule":"home","to":"rack","wire":"Cat6","color":"#d64545"},"lg-keypad":{"rule":"chain","to":"panel","wire":"Lutron QS link","color":"#9c7a1f"},"lg-motion":{"rule":"none"},"lg-shade":{"rule":"chain","to":"panel","wire":"Lutron QS shade cable","color":"#4f9a45"},"lg-outlet":{"rule":"none"},"lg-data":{"rule":"home","to":"rack","wire":"Cat6","color":"#1597b8"},"lg-thermostat":{"rule":"home","to":"rack","wire":"Cat6","color":"#7f9f2f"},"lg-doorbell":{"rule":"home","to":"rack","wire":"Cat6","color":"#a35bd6"},"lg-rack":{"rule":"source","src":"rack"},"lg-breaker":{"rule":"source","src":"panel"}};
+const PM_RULES={home:'Home run',pair:'Pair home run',chain:'Daisy chain to source',none:'No wiring',source:'Source (rack / panel)'};
+const PM_SRC={rack:'Rack / head-end',panel:'Breaker / panel'};
 const PM_TEXT_COLORS=['#c0392b','#1f5fbf','#1e8449','#111111','#d35400','#7d3c98'];
 const PM_ERASE_COLORS=[['#ffffff','White (paper)'],['#f4f1ea','Off-white'],['#e6e6e6','Light grey'],['#000000','Black']];
 
@@ -137,6 +149,51 @@ function pmCurProject(){
   .pm-esw{width:24px;height:24px;border-radius:5px;border:2px solid #3a352a;cursor:pointer;padding:0}
   .pm-esw.on{border-color:#3da5ff;box-shadow:0 0 0 2px #10263a}
   .pm-tb.danger{color:#e07a6a}
+  /* wiring runs: one SVG over the plan (0..1000 both ways), constant on-screen stroke */
+  .pm-wires{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+  .pm-wires path{fill:none;vector-effect:non-scaling-stroke;stroke-linejoin:round;stroke-linecap:round;pointer-events:none}
+  .pm-wires path.cs{stroke:#fff;stroke-opacity:.85;stroke-width:calc(5.5px * var(--inv))}
+  .pm-wires path.cs.sel{stroke:#3da5ff;stroke-opacity:1;stroke-width:calc(9px * var(--inv))}
+  .pm-wires path.ln{stroke-width:calc(2.8px * var(--inv))}
+  .pm-wires path.ln.ch{stroke-dasharray:calc(10px * var(--inv)) calc(5px * var(--inv))}
+  .pm-wires path.hit{stroke:transparent;stroke-width:calc(16px * var(--inv))}
+  .fv-ov.editing:not(.tool-place):not(.tool-room):not(.tool-erase):not(.tool-scale) .pm-wires path.hit{pointer-events:stroke;cursor:pointer}
+  .fv-ov.nowires .pm-wires{display:none}
+  .pm-wh{position:absolute;z-index:3;width:18px;height:18px;transform:translate(-50%,-50%) scale(var(--inv));border-radius:50%;background:#fff;border:3px solid #3da5ff;pointer-events:auto;touch-action:none;cursor:move;box-sizing:border-box;box-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .pm-scd{position:absolute;width:14px;height:14px;border-radius:50%;background:#ff3b30;border:2px solid #fff;transform:translate(-50%,-50%) scale(var(--inv));pointer-events:none;box-sizing:border-box}
+  .fv-ov.editing.tool-scale .fv-stage{cursor:crosshair}
+  .pm-wr{display:flex;align-items:center;gap:6px;width:100%}
+  .pm-wr .nm{flex:1;min-width:0;color:#efe9df;font-size:12.5px;line-height:1.25}
+  .pm-wr .nm small{display:block;color:#9a9388;font-size:11px}
+  .pm-wr .pm-sym{width:22px;height:22px;flex:0 0 auto;border-width:1.5px}.pm-wr .pm-sym svg{width:13px;height:13px}
+  .pm-wlist{width:100%;max-height:190px;overflow:auto;display:flex;flex-direction:column;gap:5px}
+  .pm-warn{width:100%;box-sizing:border-box;background:#3a1f14;border:1px solid #8a4a2a;color:#f2c9a8;border-radius:7px;padding:6px 8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  .pm-wh2{color:#9a9388;font-size:11.5px;width:100%}
+  .pm-le{display:flex;flex-direction:column;gap:6px;width:100%}
+  .pm-le label{font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:#9a9388}
+  .pm-le .row{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .pm-le input,.pm-le select{background:#0f0e0b;border:1px solid #3a352a;color:#efe9df;border-radius:6px;padding:6px 7px;font-size:13px;font-family:inherit;box-sizing:border-box}
+  .pm-le input[type=color]{padding:0;width:38px;height:32px}
+  /* device counter */
+  .pm-cnt{position:absolute;z-index:8;right:12px;top:64px;width:310px;max-height:calc(100% - 90px);overflow:auto;background:rgba(20,18,16,.97);border:1px solid #b99a63;border-radius:12px;padding:10px 12px;color:#efe9df;display:none;font-size:12.5px;box-shadow:0 18px 50px rgba(0,0,0,.5);box-sizing:border-box}
+  .pm-cnt.on{display:block}
+  .pm-insp.on~.pm-cnt{display:none}
+  .pm-cnt .pm-ch{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .pm-cnt .pm-ch b{color:#cbb488;letter-spacing:.1em;text-transform:uppercase;font-size:12px}
+  .pm-cnt .pm-x{margin-left:auto;background:none;border:0;color:#cbb488;font-size:20px;cursor:pointer;line-height:1;padding:2px 6px}
+  .pm-cnt table{width:100%;border-collapse:collapse}
+  .pm-cnt th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#9a9388;text-align:right;font-weight:700;padding:3px 4px;white-space:nowrap}
+  .pm-cnt th:first-child,.pm-cnt td:first-child{text-align:left}
+  .pm-cnt td{padding:3px 4px;text-align:right;border-top:1px solid #24211b;white-space:nowrap}
+  .pm-cnt td:first-child{white-space:normal}
+  .pm-cnt td b{color:#fff}
+  .pm-cnt .nmc{display:flex;align-items:center;gap:6px}
+  .pm-cnt .pm-sym{width:20px;height:20px;border-width:1.5px;flex:0 0 auto}.pm-cnt .pm-sym svg{width:12px;height:12px}
+  .pm-cnt .wsw{display:inline-block;width:18px;height:4px;border-radius:2px;flex:0 0 auto}
+  .pm-cnt h4{margin:12px 0 4px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#cbb488}
+  .pm-cnt .ft{color:#9a9388;font-size:11px;margin-top:6px}
+  .pm-cnt .tg{display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:700;cursor:pointer}
+  .pm-cnt .tg input{width:18px;height:18px;accent-color:#3da5ff}
   .pm-focus{position:absolute;pointer-events:none;box-shadow:0 0 0 200000px rgba(6,6,5,.6);outline:calc(2px * var(--inv)) solid #cbb488}
   .pm-draft{position:absolute;border:calc(2px * var(--inv)) solid #3da5ff;background:rgba(61,165,255,.18);pointer-events:none}
   /* edit panel (legend + tools) */
@@ -197,6 +254,9 @@ function pmCurProject(){
     .pm-eopts{padding:6px 10px}
     .pm-insp{left:0;right:0;width:auto;top:auto;bottom:0;max-height:46%;overflow:auto;border-radius:14px 14px 0 0;z-index:9;box-sizing:border-box}
     .pm-key{left:8px;right:8px;width:auto;bottom:40px}
+    .pm-panel{overflow-y:auto}
+    .pm-cnt{left:0;right:0;width:auto;top:auto;bottom:0;max-height:50%;border-radius:14px 14px 0 0;z-index:9}
+    .pm-wlist{max-height:150px}
   }`;
   const s=document.createElement('style'); s.id='pmCSS'; s.textContent=css; document.head.appendChild(s);
 })();
@@ -323,12 +383,15 @@ function fvBuildOverlay(){
       <button class="fv-btn fv-fit" id="fvFitBtn" onclick="fvReset()">&#x2922; Fit whole plan</button>
       <button class="fv-btn" id="fvWholeBtn" onclick="fvFitWhole()" hidden>&#x25A3; Whole floor</button>
       <button class="fv-btn" id="pmKeyBtn" onclick="pmToggleKey()" hidden>Legend</button>
+      <button class="fv-btn" id="pmCntBtn" onclick="pmToggleCnt()" hidden title="Device and wiring totals">&#x03A3; Counts</button>
+      <button class="fv-btn" id="pmWireBtn" onclick="pmToggleWires()" hidden title="Show or hide the wiring runs">&#x26A1; Wiring</button>
       <button class="fv-btn" id="pmEditBtn" onclick="pmStartEdit()" hidden>&#x270E; Plans edit</button>
       <button class="fv-btn" id="fvCloseBtn" onclick="closeFloorView()">&times; Close</button></div>
     <div class="fv-stage" id="fvStage"><div class="fv-layer" id="fvLayer"><img id="fvImg" alt="" draggable="false"><div class="pm-layer" id="pmLayer"></div></div></div>
     <div class="fv-hint" id="fvHint">Scroll, pinch or +/&minus; to zoom · drag to pan · Esc to close</div>
     <div class="pm-panel" id="pmPanel"></div>
     <div class="pm-insp" id="pmInsp"></div>
+    <div class="pm-cnt" id="pmCnt"></div>
     <div class="pm-key" id="pmKey"></div>
     <div class="pm-toast" id="pmToast"></div>`;
   document.body.appendChild(ov);
@@ -356,6 +419,7 @@ function openFloorView(img,label,opts){
   document.getElementById('pmEditBtn').hidden=true;
   document.getElementById('pmKeyBtn').hidden=true;
   document.getElementById('pmKey').classList.remove('on');
+  document.getElementById('pmCntBtn').hidden=true; document.getElementById('pmWireBtn').hidden=true;
   document.getElementById('fvHint').innerHTML=FV.region?'Fit shows the room · zoom out or “Whole floor” to see the whole plan · drag to pan · Esc to close':'Scroll, pinch or +/&minus; to zoom · drag to pan · Esc to close';
   const im=document.getElementById('fvImg');
   FV.ptrs.clear(); FV.pinch=null; FV.pan=null; FV.nw=0; FV.tap=null;
@@ -374,12 +438,14 @@ function closeFloorView(){
 const PM={project:null,plan:null,label:'',room:null,legend:[],lmap:{},legendReady:null,notMigrated:false,
   data:{items:[]},saved:'{"items":[]}',version:0,canEdit:false,history:[],edit:false,tool:'select',sel:null,dirty:false,
   undo:[],redo:[],rooms:null,drag:null,draw:null,loadSeq:0,keyOpen:false,
-  eraseMode:'rect',eraseColor:'#ffffff',brushPx:24};
+  eraseMode:'rect',eraseColor:'#ffffff',brushPx:24,
+  cntOpen:false,showWires:true,proj:null,legEdit:null,legDraft:null,scalePts:null,pendingGen:null};
 async function pmEnsureLegend(force){
   if(PM.legendReady&&!force) return PM.legendReady;
   PM.legendReady=(async()=>{
     try{ const d=await pmApi('plans/legend'); PM.legend=d.items||[]; PM.notMigrated=false; }
     catch(e){ PM.legend=PM_DEFAULT_LEGEND.slice(); PM.notMigrated=!!(e.data&&e.data.not_migrated); }
+    PM.legend.forEach(l=>{ if(typeof l.wiring==='string'){ try{ l.wiring=JSON.parse(l.wiring); }catch(e){ l.wiring=null; } } });
     PM.lmap={}; PM.legend.forEach(l=>PM.lmap[l.id]=l);
     PM_DEFAULT_LEGEND.forEach(l=>{ if(!PM.lmap[l.id]) PM.lmap[l.id]=l; });   // symbols from a removed item still draw
   })();
@@ -398,7 +464,7 @@ async function pmLoad(){
   PM.saved=JSON.stringify(PM.data);
   document.getElementById('pmEditBtn').hidden=!(PM.canEdit&&!FV.region);
   document.getElementById('pmKeyBtn').hidden=!pmCounts(PM.data.items).length;
-  pmRender(); pmRenderKey();
+  pmRender(); pmRenderKey(); pmBarBtns(); pmRenderCnt(); pmLoadProj();
 }
 function pmItem(id){ return (PM.data.items||[]).find(i=>i.id===id); }
 function pmInRegion(it,R){ return !R||(it.x>=R.x&&it.x<=R.x+R.w&&it.y>=R.y&&it.y<=R.y+R.h); }
@@ -418,6 +484,7 @@ function pmItemHTML(it){
   if(it.t==='text') return `<div class="pm-it pm-t${sel}" data-id="${pmEsc(it.id)}" style="${pos};color:${pmEsc(it.c||'#c0392b')};--z:${Number(it.z)||1}">${pmEsc(it.s)}</div>`;
   if(it.t==='note') return `<div class="pm-it pm-n${sel}" data-id="${pmEsc(it.id)}" style="${pos}">${pmEsc(it.s)}</div>`;
   if(it.t==='erase') return pmEraseHTML(it,sel);
+  if(it.t==='wire') return '';   // all runs are drawn together by pmWiresHTML
   if(it.t==='room'){ const nm=pmRoomName(it);
     return `<div class="pm-room${sel}${it.room_id||it.name?'':' unassigned'}" data-rid="${pmEsc(it.id)}" style="left:${it.x*100}%;top:${it.y*100}%;width:${it.w*100}%;height:${it.h*100}%">
       <span class="pm-rl" data-id="${pmEsc(it.id)}">${pmEsc(nm||'Unassigned room')}</span>${PM.edit?`<span class="pm-rh" data-id="${pmEsc(it.id)}" data-h="1"></span>`:''}</div>`; }
@@ -448,9 +515,11 @@ function pmPosDel(){
 function pmRender(){
   const ly=document.getElementById('pmLayer'); if(!ly) return;
   const items=PM.data.items||[];
-  // rooms underneath, then notes/text, then symbols on top
+  // erase patches, then wiring, then rooms, notes/text, and symbols on top
   const order={erase:-1,room:0,note:1,text:2,sym:3};
-  let html=items.slice().sort((a,b)=>(order[a.t]||0)-(order[b.t]||0)).map(pmItemHTML).join('');
+  let html=items.filter(i=>i.t==='erase').map(pmItemHTML).join('')+pmWiresHTML(items,PM.edit)
+    +items.filter(i=>i.t!=='erase'&&i.t!=='wire').sort((a,b)=>(order[a.t]||0)-(order[b.t]||0)).map(pmItemHTML).join('');
+  if(PM.edit&&PM.tool==='scale'&&PM.scalePts) PM.scalePts.forEach(p=>{ html+=`<div class="pm-scd" style="left:${p[0]*100}%;top:${p[1]*100}%"></div>`; });
   const R=FV.region; if(R) html+=`<div class="pm-focus" style="left:${R.x*100}%;top:${R.y*100}%;width:${R.w*100}%;height:${R.h*100}%"></div>`;
   if(PM.draw&&PM.draw.rect){ const d=PM.draw.rect; html+=`<div class="pm-draft" style="left:${d.x*100}%;top:${d.y*100}%;width:${d.w*100}%;height:${d.h*100}%"></div>`; }
   if(PM.edit&&PM.sel&&pmItem(PM.sel)) html+=`<button class="pm-del" id="pmDelFloat" type="button" title="Delete this item" aria-label="Delete selected item"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13M10 11v6M14 11v6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>`;
@@ -465,7 +534,9 @@ function pmPlaceEl(it){
   if(it.t==='room'){ const el=document.querySelector(`#pmLayer [data-rid="${CSS.escape(it.id)}"]`); if(!el) return pmRender();
     el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%'; el.style.width=it.w*100+'%'; el.style.height=it.h*100+'%'; pmPosDel(); return; }
   const el=document.querySelector(`#pmLayer .pm-it[data-id="${CSS.escape(it.id)}"]`); if(!el) return pmRender();
-  el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%'; pmPosDel();
+  el.style.left=it.x*100+'%'; el.style.top=it.y*100+'%';
+  if(it.t==='sym'&&(PM.data.items||[]).some(w=>w.t==='wire'&&(w.d||[]).includes(it.id))) pmRenderWires();   // runs follow the device
+  pmPosDel();
 }
 function pmNorm(cx,cy){ const r=document.getElementById('fvLayer').getBoundingClientRect(); return {u:(cx-r.left)/r.width,v:(cy-r.top)/r.height}; }
 function pmToast(html,ms){ const t=document.getElementById('pmToast'); if(!t) return; t.innerHTML=html; t.classList.add('on'); clearTimeout(pmToast._t); pmToast._t=setTimeout(()=>t.classList.remove('on'),ms||2600); }
@@ -485,29 +556,30 @@ async function pmStartEdit(){
   PM.edit=true; PM.tool='select'; PM.sel=null; PM.undo=[]; PM.redo=[]; PM.dirty=false; PM.keyOpen=false;
   const ov=document.getElementById('fvOverlay'); ov.classList.add('editing');
   document.getElementById('pmEditBtn').hidden=true; document.getElementById('pmKeyBtn').hidden=true;
-  pmRenderPanel(); pmRender(); pmRenderKey(); pmRenderInsp();
+  pmRenderPanel(); pmRender(); pmRenderKey(); pmRenderInsp(); pmBarBtns(); pmRenderCnt();
   const wasFit=FV.atFit; if(wasFit) fvReset(); else fvOnResize();
   if(!PM.rooms){ try{ PM.rooms=(await pmApi('scope?project='+encodeURIComponent(PM.project))).rooms||[]; }catch(e){ PM.rooms=[]; } pmRender(); }
 }
 function pmEndEdit(discard){
   if(discard&&PM.dirty){ try{ PM.data=JSON.parse(PM.saved); }catch(e){} }
-  PM.edit=false; PM.sel=null; PM.drag=null; PM.draw=null; PM.dirty=false;
+  PM.edit=false; PM.sel=null; PM.drag=null; PM.draw=null; PM.dirty=false; PM.legEdit=null; PM.scalePts=null; PM.pendingGen=null;
   const ov=document.getElementById('fvOverlay'); if(!ov) return;
-  ov.classList.remove('editing','tool-place','tool-room','tool-erase');
+  ov.classList.remove('editing','tool-place','tool-room','tool-erase','tool-scale');
   document.getElementById('pmPanel').classList.remove('on'); document.getElementById('pmInsp').classList.remove('on');
   document.getElementById('pmEditBtn').hidden=!(PM.canEdit&&!FV.region);
   document.getElementById('pmKeyBtn').hidden=!pmCounts(PM.data.items).length;
-  pmRender(); pmRenderKey();
+  pmRender(); pmRenderKey(); pmBarBtns(); pmRenderCnt();
   if(FV.atFit) fvReset(); else fvOnResize();
 }
 function pmDone(){ if(PM.dirty&&!confirm('You have unsaved changes. Leave Plans edit and discard them?')) return; pmEndEdit(true); }
 function pmSetTool(t){
   PM.tool=t; const ov=document.getElementById('fvOverlay');
-  ov.classList.toggle('tool-place',t.indexOf('sym:')===0||t==='text'||t==='note'); ov.classList.toggle('tool-room',t==='room'); ov.classList.toggle('tool-erase',t==='erase');
-  pmRenderPanel();
+  ov.classList.toggle('tool-place',t.indexOf('sym:')===0||t==='text'||t==='note'); ov.classList.toggle('tool-room',t==='room'); ov.classList.toggle('tool-erase',t==='erase'); ov.classList.toggle('tool-scale',t==='scale');
+  if(t!=='scale') PM.scalePts=null;
+  pmRenderPanel(); if(PM.edit) pmRender();
 }
 function pmSnapshot(){ PM.undo.push(JSON.stringify(PM.data)); if(PM.undo.length>60) PM.undo.shift(); PM.redo=[]; }
-function pmChanged(){ PM.dirty=JSON.stringify(PM.data)!==PM.saved; pmStatus(); pmUpdateCounts(); }
+function pmChanged(){ PM.dirty=JSON.stringify(PM.data)!==PM.saved; pmStatus(); pmUpdateCounts(); pmRenderWopts(); pmRenderCnt(); pmBarBtns(); }
 function pmUndo(){ if(!PM.undo.length) return; PM.redo.push(JSON.stringify(PM.data)); PM.data=JSON.parse(PM.undo.pop()); if(PM.sel&&!pmItem(PM.sel)) PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmRenderPanel(); }
 function pmRedo(){ if(!PM.redo.length) return; PM.undo.push(JSON.stringify(PM.data)); PM.data=JSON.parse(PM.redo.pop()); if(PM.sel&&!pmItem(PM.sel)) PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmRenderPanel(); }
 function pmStatus(msg,cls){
@@ -528,13 +600,15 @@ function pmRenderPanel(){
   const T=(t,lbl,title)=>`<button class="pm-tb${PM.tool===t?' on':''}" data-tool="${t}" title="${title||''}">${lbl}</button>`;
   const hist=(PM.history||[]).map(h=>`<option value="${h.version}">v${h.version} · ${pmEsc(new Date(h.saved_at).toLocaleString([], {month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}))}</option>`).join('');
   p.innerHTML=`<div class="pm-ph"><b>Plans edit</b><span class="pm-status" id="pmStatus"></span></div>
-    <div class="pm-tools">${T('select','&#x2196; Select / move','Select, drag to move')}${T('text','T&nbsp;Text','Tap the plan to add a text label')}${T('note','&#x1F5C8; Note','Tap the plan to add a note')}${T('room','&#x25AD; Room box','Drag a box around a room, then pick the room')}${T('erase','&#x232B; Erase','Cover something printed on the plan with a patch')}
+    <div class="pm-tools">${T('select','&#x2196; Select / move','Select, drag to move')}${T('text','T&nbsp;Text','Tap the plan to add a text label')}${T('note','&#x1F5C8; Note','Tap the plan to add a note')}${T('room','&#x25AD; Room box','Drag a box around a room, then pick the room')}${T('erase','&#x232B; Erase','Cover something printed on the plan with a patch')}${T('wire','&#x26A1; Wiring','Generate wiring runs for the devices on this plan')}
       <button class="pm-tb" id="pmUndo" onclick="pmUndo()" title="Undo (Ctrl+Z)">&#x21B6;</button><button class="pm-tb" id="pmRedo" onclick="pmRedo()" title="Redo">&#x21B7;</button><button class="pm-tb danger" id="pmDelSel" onclick="pmDelete()" title="Delete the selected item (Del)">&#x1F5D1; Delete</button></div>
     <div class="pm-eopts${PM.tool==='erase'?' on':''}" id="pmEopts">
       <button class="pm-tb${PM.eraseMode==='rect'?' on':''}" data-em="rect" title="Drag a rectangle">&#x25AD; Box</button><button class="pm-tb${PM.eraseMode==='brush'?' on':''}" data-em="brush" title="Paint over it">&#x1F58C; Brush</button>
       <span id="pmBrushRow" style="display:${PM.eraseMode==='brush'?'flex':'none'};align-items:center;gap:6px;flex:1 1 100%">Size<input type="range" id="pmBrush" min="4" max="90" step="1" value="${PM.brushPx}"><span id="pmBrushV">${PM.brushPx}px</span></span>
       <span style="flex:1 1 100%;display:flex;gap:6px;align-items:center">Fill ${PM_ERASE_COLORS.map(([c,n])=>`<button class="pm-esw${PM.eraseColor===c?' on':''}" data-ec="${c}" title="${n}" style="background:${c}"></button>`).join('')}<input type="color" id="pmEraseC" value="${PM.eraseColor}" title="Pick any fill colour"></span>
       <span style="flex:1 1 100%">${PM.eraseMode==='brush'?'Paint over printed marks to hide them.':'Drag a box over printed marks to hide them.'} The original plan file is never changed.</span></div>
+    <div class="pm-eopts" id="pmWopts"></div>
+    <div class="pm-eopts" id="pmLopts"></div>
     <div class="pm-lh"><span>Legend · tap, then tap the plan</span><button onclick="pmToggleAdd()">+ Add</button></div>
     <div class="pm-leg">${PM.legend.map(l=>`<button class="pm-lg${PM.tool==='sym:'+l.id?' on':''}" data-k="${pmEsc(l.id)}" title="${pmEsc(l.name)}">${pmSymHTML(l)}<span class="nm">${pmEsc(l.name)}</span><span class="ct"></span></button>`).join('')}</div>
     <div class="pm-add" id="pmAdd"><input id="pmAddName" placeholder="Legend name (e.g. Ceiling fan)" style="flex:1 1 100%">
@@ -550,7 +624,7 @@ function pmRenderPanel(){
   const br=document.getElementById('pmBrush'); if(br) br.oninput=()=>{ PM.brushPx=Number(br.value)||24; document.getElementById('pmBrushV').textContent=PM.brushPx+'px'; };
   p.querySelectorAll('.pm-lg[data-k]').forEach(b=>b.onclick=()=>pmSetTool(PM.tool==='sym:'+b.dataset.k?'select':'sym:'+b.dataset.k));
   const ic=document.getElementById('pmAddIcon'); if(ic) ic.onchange=()=>{ document.getElementById('pmAddLetters').style.display=ic.value==='text'?'':'none'; };
-  pmStatus(); pmUpdateCounts();
+  pmStatus(); pmUpdateCounts(); pmRenderWopts(); pmRenderLopts();
 }
 function pmToggleAdd(){ const a=document.getElementById('pmAdd'); if(a){ a.classList.toggle('on'); if(a.classList.contains('on')) document.getElementById('pmAddName').focus(); } }
 async function pmAddLegend(){
@@ -565,7 +639,7 @@ function pmAddItem(it){ pmSnapshot(); PM.data.items=PM.data.items||[]; PM.data.i
 function pmDelete(id){ id=id||PM.sel; if(!id||!pmItem(id)) return; pmSnapshot(); PM.data.items=PM.data.items.filter(i=>i.id!==id); if(PM.sel===id) PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmToast('Deleted · <a href="#" onclick="pmUndo();return false" style="color:#cbb488">Undo</a>',3000); }
 function pmClearAll(){
   const n=(PM.data.items||[]).length; if(!n) return;
-  if(!confirm(`Clear all ${n} item${n>1?'s':''} on this plan (symbols, text, notes, erase patches and room boxes)?\n\nNothing is permanent until you press Save, and older versions stay in History.`)) return;
+  if(!confirm(`Clear all ${n} item${n>1?'s':''} on this plan (symbols, text, notes, wiring, erase patches and room boxes)?\n\nNothing is permanent until you press Save, and older versions stay in History.`)) return;
   pmSnapshot(); PM.data.items=[]; PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmStatus(); pmStatus('Cleared — press Save to keep','dirty');
 }
 function pmSelect(id){
@@ -598,6 +672,19 @@ function pmRenderInsp(){
       <div class="row">${del}<span style="flex:1"></span><button class="pm-tb" onclick="pmSelect(null)">Done</button></div>`;
     box.querySelectorAll('.pm-esw').forEach(b=>b.onclick=()=>{ pmSnapshot(); it.c=b.dataset.c; pmRender(); pmRenderInsp(); pmChanged(); });
     const ci=document.getElementById('pmiC'); ci.onfocus=()=>pmSnapshot(); ci.oninput=()=>{ it.c=ci.value; pmRender(); pmChanged(); };
+  } else if(it.t==='wire'){
+    const l=PM.lmap[it.k], map=pmSymMap(PM.data.items), ar=pmDataAR(PM.data);
+    const L=pmLenU(pmWirePts(it,map),ar), ft=pmUToFt(L,PM.data.scale,ar);
+    const nd=(it.d||[]).filter(id=>id&&map[id]&&pmRule(map[id].k).rule!=='source').length;
+    box.innerHTML=`<label>Wire run · ${pmEsc(PM_RULES[it.r]||'')}</label>
+      <div class="row">${pmSymHTML(l)}<b>${pmEsc(l?l.name:'Device')}</b><span style="color:#9a9388">· ${nd} device${nd===1?'':'s'} · <span id="pmiLen">${ft!=null?'≈ '+Math.round(ft)+' ft':'≈ '+Math.round(L)+' u'}</span></span></div>
+      <label>Wire / cable</label><input type="text" id="pmiW" maxlength="60" value="${pmEsc(it.w)}">
+      <div class="row"><label style="margin-right:auto">Line colour</label><input type="color" id="pmiC" value="${pmEsc(it.c||'#888888')}"></div>
+      <div style="font-size:11.5px;color:#9a9388">Drag a white dot to move that bend · tap a dot to flip the corner. The run follows its devices when they move.</div>
+      <div class="row">${del}<button class="pm-tb" id="pmiRst" title="Back to plain L-shaped legs">Reset bends</button><span style="flex:1"></span><button class="pm-tb" onclick="pmSelect(null)">Done</button></div>`;
+    const wi=document.getElementById('pmiW'); wi.onfocus=()=>pmSnapshot(); wi.oninput=()=>{ it.w=wi.value; pmChanged(); };
+    const ci=document.getElementById('pmiC'); ci.onfocus=()=>pmSnapshot(); ci.oninput=()=>{ it.c=ci.value; pmRenderWires(); pmChanged(); };
+    document.getElementById('pmiRst').onclick=()=>{ pmSnapshot(); it.g=(it.g||[]).map(()=>['h',null]); pmRenderWires(); pmChanged(); pmRenderInsp(); };
   } else if(it.t==='room'){
     const rooms=PM.rooms||[];
     box.innerHTML=`<label>Room region</label><select id="pmiRoom"><option value="">— choose a room —</option>${rooms.map(r=>`<option value="${pmEsc(r.id)}"${r.id===it.room_id?' selected':''}>${pmEsc(r.name)}${r.floor?' · '+pmEsc(r.floor):''}</option>`).join('')}<option value="__new"${!it.room_id&&it.name?' selected':''}>+ New room…</option></select>
@@ -621,6 +708,7 @@ function pmFocusInsp(){ setTimeout(()=>{ const s=document.getElementById('pmiS')
 function pmPointerDown(e){
   if(!PM.edit) return false;
   if(e.target&&e.target.closest&&e.target.closest('#pmLayer .pm-del')){ PM.delTap=e.pointerId; return true; }
+  if(PM.tool==='scale') return false;   // taps pick the two scale points
   if(PM.tool==='erase'){
     const n=pmNorm(e.clientX,e.clientY), L=document.getElementById('fvLayer').getBoundingClientRect();
     const p0={u:pmClamp(n.u,0,1),v:pmClamp(n.v,0,1)};
@@ -634,7 +722,7 @@ function pmPointerDown(e){
     const it=pmItem(el.dataset.id); if(!it) return false;
     if(PM.sel!==it.id) pmSelect(it.id);
     const n=pmNorm(e.clientX,e.clientY);
-    PM.drag={pid:e.pointerId,id:it.id,mode:el.dataset.h?'resize':'move',n0:n,o:{x:it.x,y:it.y,w:it.w,h:it.h},moved:false,snap:JSON.stringify(PM.data),last:{x:e.clientX,y:e.clientY},sx:e.clientX,sy:e.clientY};
+    PM.drag={pid:e.pointerId,id:it.id,mode:it.t==='wire'?(el.dataset.leg!=null?'leg':'none'):el.dataset.h?'resize':'move',leg:Number(el.dataset.leg),n0:n,o:{x:it.x,y:it.y,w:it.w,h:it.h},moved:false,snap:JSON.stringify(PM.data),last:{x:e.clientX,y:e.clientY},sx:e.clientX,sy:e.clientY};
     return true;
   }
   if(PM.tool==='room'){
@@ -669,7 +757,11 @@ function pmGestureMove(e){
   const n=pmNorm(e.clientX,e.clientY);
   if(PM.drag){
     if(!g.moved&&Math.hypot(e.clientX-g.sx,e.clientY-g.sy)<4) return true;
-    g.moved=true; const it=pmItem(g.id); if(!it) return true;
+    const it=pmItem(g.id); if(!it) return true;
+    if(it.t==='wire'){ if(g.mode!=='leg') return true; g.moved=true;
+      it.g=it.g||[]; const q=it.g[g.leg]||['h',null], o=q[0]==='v'?'v':'h';
+      it.g[g.leg]=[o,Math.round(pmClamp(o==='h'?n.u:n.v,0,1)*100000)/100000]; pmRenderWires(); return true; }
+    g.moved=true;
     const du=n.u-g.n0.u, dv=n.v-g.n0.v;
     if(it.t==='room'||it.t==='erase'){
       if(g.mode==='resize'){ it.w=pmClamp(g.o.w+du,0.01,1-it.x); it.h=pmClamp(g.o.h+dv,0.01,1-it.y); }
@@ -691,8 +783,9 @@ function pmGestureMove(e){
 function pmGestureEnd(e){
   if(PM.delTap!=null&&PM.delTap===e.pointerId){ PM.delTap=null; if(e.type==='pointerup') pmDelete(); return true; }
   const g=PM.drag||PM.draw; if(!g||g.pid!==e.pointerId) return false;
-  if(PM.drag){ PM.drag=null; if(g.moved){ PM.undo.push(g.snap); if(PM.undo.length>60) PM.undo.shift(); PM.redo=[]; pmChanged(); }
-    else { const it=pmItem(g.id); if(it&&(it.t==='text'||it.t==='note')) pmFocusInsp(); } }
+  if(PM.drag){ PM.drag=null; if(g.moved){ PM.undo.push(g.snap); if(PM.undo.length>60) PM.undo.shift(); PM.redo=[]; pmChanged(); const mi=pmItem(g.id); if(mi&&mi.t==='wire') pmRenderInsp(); }
+    else { const it=pmItem(g.id); if(it&&(it.t==='text'||it.t==='note')) pmFocusInsp();
+      if(it&&it.t==='wire'&&g.mode==='leg'){ pmSnapshot(); it.g=it.g||[]; const q=it.g[g.leg]||['h',null]; it.g[g.leg]=[q[0]==='v'?'h':'v',null]; pmRenderWires(); pmChanged(); } } }
   else if(g.erase==='brush'){ PM.draw=null; pmBrushFinish(g); }
   else if(g.erase){ PM.draw=null; const r=g.rect; pmRender();
     if(r&&r.w>0.002&&r.h>0.002) pmAddItem({t:'erase',m:'rect',id:pmUid(),x:r.x,y:r.y,w:r.w,h:r.h,c:PM.eraseColor}); }
@@ -714,7 +807,10 @@ function pmTap(cx,cy,e){
   if(PM.edit){
     if(!inside){ pmSelect(null); return; }
     const t=PM.tool;
-    if(t.indexOf('sym:')===0){ pmAddItem({t:'sym',id:pmUid(),k:t.slice(4),x:n.u,y:n.v,s:''}); return; }
+    if(t==='scale'){ pmScaleTap(n.u,n.v); return; }
+    if(t.indexOf('sym:')===0){ const k=t.slice(4); pmAddItem({t:'sym',id:pmUid(),k,x:n.u,y:n.v,s:''});
+      if(PM.pendingGen&&pmRule(k).rule==='source'){ const w=PM.pendingGen; PM.pendingGen=null; pmSetTool('wire'); pmWireGen(w); }
+      return; }
     if(t==='text'){ pmAddItem({t:'text',id:pmUid(),x:n.u,y:n.v,s:'Label',c:PM_TEXT_COLORS[0],z:1}); pmFocusInsp(); return; }
     if(t==='note'){ pmAddItem({t:'note',id:pmUid(),x:n.u,y:n.v,s:'Note'}); pmFocusInsp(); return; }
     pmSelect(null); return;
@@ -761,10 +857,13 @@ async function pmSave(){
       const r=await pmApi('scope/room',{method:'POST',body:{project:PM.project,name:it.name,floor}});
       it.room_id=r.id; (PM.rooms=PM.rooms||[]).push({id:r.id,name:it.name,floor});
     }
+    const wm=pmSymMap(items);
+    items.forEach(w=>{ if(w.t==='wire'){ w.n=pmWireNodes(w,wm).map(p=>[Math.round(p[0]*100000)/100000,Math.round(p[1]*100000)/100000]); w.x=w.n[0][0]; w.y=w.n[0][1]; } });
+    if(FV.nw) PM.data.ar=Math.round(FV.nh/FV.nw*100000)/100000;
     const d=await pmApi('plans/markup',{method:'PUT',body:{project:PM.project,plan:PM.plan,label:PM.label,data:PM.data,base_version:PM.version}});
     PM.data=d.data; PM.version=d.version; PM.saved=JSON.stringify(PM.data); PM.dirty=false;
     try{ const h=await pmApi('plans/markup?project='+encodeURIComponent(PM.project)+'&plan='+encodeURIComponent(PM.plan)); PM.history=h.history||[]; }catch(e){}
-    pmRender(); pmRenderPanel(); pmStatus('Saved ✓ v'+PM.version,'ok');
+    pmRender(); pmRenderPanel(); pmStatus('Saved ✓ v'+PM.version,'ok'); pmLoadProj();
     window.dispatchEvent(new CustomEvent('pm:saved',{detail:{project:PM.project,plan:PM.plan}}));
   }catch(e){
     if(e.status===409){ pmStatus('Conflict','err'); if(confirm(e.message+'\n\nReload the latest version now? (your unsaved changes will be lost)')){ PM.dirty=false; pmEndEdit(false); await pmLoad(); } return; }
@@ -778,9 +877,257 @@ async function pmRestore(){
   try{ const d=await pmApi('plans/markup/restore',{method:'POST',body:{project:PM.project,plan:PM.plan,version:v}});
     PM.data=d.data; PM.version=d.version; PM.saved=JSON.stringify(PM.data); PM.dirty=false; PM.undo=[]; PM.redo=[]; PM.sel=null;
     const h=await pmApi('plans/markup?project='+encodeURIComponent(PM.project)+'&plan='+encodeURIComponent(PM.plan)); PM.history=h.history||[];
-    pmRender(); pmRenderInsp(); pmRenderPanel(); pmStatus('Restored v'+v+' as v'+PM.version,'ok');
+    pmRender(); pmRenderInsp(); pmRenderPanel(); pmStatus('Restored v'+v+' as v'+PM.version,'ok'); pmLoadProj();
     window.dispatchEvent(new CustomEvent('pm:saved',{detail:{project:PM.project,plan:PM.plan}}));
   }catch(e){ alert(e.message); }
+}
+
+/* ---------------- wiring runs + device counter ---------------- */
+/* Wiring rule of a legend item: {rule:'home'|'pair'|'chain'|'none'|'source', to:'rack'|'panel',
+   wire, color, max, src}. Stored in plan_legend.wiring; seeded rows fall back to PM_DEFAULT_WIRING. */
+function pmRule(k){
+  const l=PM.lmap[k]; let w=l&&l.wiring;
+  if(typeof w==='string'){ try{ w=JSON.parse(w); }catch(e){ w=null; } }
+  if(!w||!w.rule) w=PM_DEFAULT_WIRING[k]||{rule:'none'};
+  const rule=PM_RULES[w.rule]?w.rule:'none';
+  return {rule,to:w.to==='panel'||w.to==='rack'?w.to:(rule==='chain'?'panel':'rack'),wire:w.wire||'',color:w.color||(l&&l.color)||'#888888',max:Number(w.max)||0,src:w.src==='panel'?'panel':'rack'};
+}
+function pmWired(k){ return ['home','pair','chain'].includes(pmRule(k).rule); }
+function pmSrcLegend(role){ return PM.legend.find(l=>{ const r=pmRule(l.id); return r.rule==='source'&&r.src===role; })||null; }
+function pmSymMap(items){ const m={}; (items||[]).forEach(i=>{ if(i.t==='sym') m[i.id]=i; }); return m; }
+function pmDataAR(data){ const a=Number(data&&data.ar); if(a>0) return a; return (data===PM.data&&FV.nw)?FV.nh/FV.nw:1; }
+/* anchor points of a run, following the symbols they belong to */
+function pmWireNodes(w,map){ return (w.n||[]).map((p,i)=>{ const id=w.d&&w.d[i], s=id&&map[id]; return s?[s.x,s.y]:p; }); }
+/* one leg A->B: 'h' = horizontal, vertical at x=m, horizontal; 'v' = vertical, horizontal at y=m, vertical.
+   Default bend (m=null) gives a plain L. */
+function pmLegGeom(A,B,q){
+  const o=q&&q[0]==='v'?'v':'h', m=q&&q[1]!=null?q[1]:(o==='h'?B[0]:B[1]);
+  return o==='h'?{o,m,pts:[A,[m,A[1]],[m,B[1]],B],mid:[m,(A[1]+B[1])/2]}:{o,m,pts:[A,[A[0],m],[B[0],m],B],mid:[(A[0]+B[0])/2,m]};
+}
+function pmWirePts(w,map){
+  const N=pmWireNodes(w,map), out=[];
+  for(let i=0;i<N.length-1;i++) pmLegGeom(N[i],N[i+1],w.g&&w.g[i]).pts.forEach((p,j)=>{
+    if(i>0&&j===0) return; const q=out[out.length-1]; if(q&&Math.abs(q[0]-p[0])<1e-9&&Math.abs(q[1]-p[1])<1e-9) return; out.push(p); });
+  if(!out.length&&N[0]) out.push(N[0]);
+  return out;
+}
+/* length in plan units (u = 1% of the plan width) and in feet when the plan has a scale */
+function pmLenU(P,ar){ let s=0; for(let i=1;i<P.length;i++) s+=Math.abs(P[i][0]-P[i-1][0])*100+Math.abs(P[i][1]-P[i-1][1])*100*ar; return s; }
+function pmUToFt(u,sc,ar){ if(!sc||!(sc.d>0)||!sc.a||!sc.b) return null; const du=Math.hypot((sc.b[0]-sc.a[0])*100,(sc.b[1]-sc.a[1])*100*ar); return du>0?u*sc.d/du:null; }
+function pmFmtLen(e){ const p=[]; if(e.ft>0) p.push('≈ '+Math.round(e.ft)+' ft'); if(e.un>0) p.push('≈ '+Math.round(e.un)+' u'); return p.join(' + ')||'—'; }
+function pmWireTouches(w,R,map){
+  if(!R) return true; const P=pmWirePts(w,map), x0=R.x,x1=R.x+R.w,y0=R.y,y1=R.y+R.h;
+  if(P.length===1) return P[0][0]>=x0&&P[0][0]<=x1&&P[0][1]>=y0&&P[0][1]<=y1;
+  for(let i=1;i<P.length;i++){ const a=P[i-1],b=P[i];
+    if(Math.max(a[0],b[0])>=x0&&Math.min(a[0],b[0])<=x1&&Math.max(a[1],b[1])>=y0&&Math.min(a[1],b[1])<=y1) return true; }   // axis-aligned legs
+  return false;
+}
+/* runs per wire type: [{w,c,runs,ft,un}] (R = only runs passing through that region) */
+function pmWireSummary(data,R,acc){
+  const items=(data&&data.items)||[], map=pmSymMap(items), ar=pmDataAR(data), g=acc||{};
+  items.forEach(w=>{ if(w.t!=='wire'||(R&&!pmWireTouches(w,R,map))) return;
+    const key=w.w||((PM.lmap[w.k]||{}).name)||'Wire', e=g[key]||(g[key]={w:key,c:w.c,runs:0,ft:0,un:0});
+    e.runs++; const L=pmLenU(pmWirePts(w,map),ar), f=pmUToFt(L,data.scale,ar); if(f!=null) e.ft+=f; else e.un+=L; });
+  return acc?g:Object.values(g).sort((a,b)=>a.w.localeCompare(b.w));
+}
+function pmProjCounts(list){ const c={}; (list||[]).forEach(m=>((m.data&&m.data.items)||[]).forEach(it=>{ if(it.t==='sym') c[it.k]=(c[it.k]||0)+1; })); return c; }
+function pmWiresHTML(items,edit){
+  const ws=(items||[]).filter(i=>i.t==='wire'); if(!ws.length) return '';
+  const map=pmSymMap(items), f=v=>(v*1000).toFixed(2);
+  let cs='',ln='',hit='';
+  ws.forEach(w=>{ const P=pmWirePts(w,map); if(P.length<2) return;
+    const d='M'+P.map(p=>f(p[0])+' '+f(p[1])).join(' L'), sel=edit&&PM.sel===w.id?' sel':'';
+    cs+=`<path class="cs${sel}" d="${d}"/>`;
+    ln+=`<path class="ln${w.r==='chain'?' ch':''}" d="${d}" stroke="${pmEsc(w.c||'#888888')}" data-wk="${pmEsc(w.k)}"/>`;
+    if(edit) hit+=`<path class="hit" data-id="${pmEsc(w.id)}" d="${d}"/>`; });
+  let h=`<svg class="pm-wires" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">${cs}${ln}${hit}</svg>`;
+  const sw=edit&&PM.sel?ws.find(x=>x.id===PM.sel):null;
+  if(sw){ const N=pmWireNodes(sw,map);
+    for(let i=0;i<N.length-1;i++){ const m=pmLegGeom(N[i],N[i+1],sw.g&&sw.g[i]).mid;
+      h+=`<div class="pm-wh" data-id="${pmEsc(sw.id)}" data-leg="${i}" style="left:${m[0]*100}%;top:${m[1]*100}%" title="Drag to move this bend · tap to flip the corner"></div>`; } }
+  return h;
+}
+/* redraw only the runs (keeps the rest of the layer, e.g. while dragging a device) */
+function pmRenderWires(){
+  const ly=document.getElementById('pmLayer'); if(!ly) return;
+  ly.querySelectorAll(':scope > .pm-wires, :scope > .pm-wh').forEach(e=>e.remove());
+  const h=pmWiresHTML(PM.data.items||[],PM.edit); if(!h) return;
+  const tmp=document.createElement('div'); tmp.innerHTML=h;
+  const ref=[...ly.children].find(c=>!c.classList.contains('pm-er'))||null;
+  [...tmp.children].forEach(nd=>ly.insertBefore(nd,ref));
+  if(PM.edit&&PM.sel) pmPosDel();
+}
+/* --- generation --- */
+function pmGenWiresFor(k){
+  const R=pmRule(k); if(!pmWired(k)) return {n:0};
+  const items=PM.data.items||[], devs=items.filter(i=>i.t==='sym'&&i.k===k); if(!devs.length) return {n:0};
+  const srcs=items.filter(i=>i.t==='sym'&&pmRule(i.k).rule==='source'&&pmRule(i.k).src===R.to);
+  if(!srcs.length) return {missing:R.to};
+  const ar=pmDataAR(PM.data), P=i=>[i.x,i.y], D=(a,b)=>Math.abs(a.x-b.x)+Math.abs(a.y-b.y)*ar;   // right-angle distance
+  const near=d=>srcs.reduce((b,s)=>D(d,s)<D(d,b)?s:b,srcs[0]);
+  const runs=[];
+  if(R.rule==='home') devs.forEach(d=>runs.push([d,near(d)]));
+  else if(R.rule==='pair'){
+    const pairs=[]; for(let i=0;i<devs.length;i++) for(let j=i+1;j<devs.length;j++) pairs.push([D(devs[i],devs[j]),devs[i],devs[j]]);
+    pairs.sort((a,b)=>a[0]-b[0]); const used=new Set();
+    pairs.forEach(([,a,b])=>{ if(used.has(a)||used.has(b)) return; used.add(a); used.add(b);
+      const sa=near(a), sb=near(b); runs.push(D(a,sa)<=D(b,sb)?[b,a,sa]:[a,b,sb]); });   // link the pair, home-run from the nearer one
+    devs.filter(d=>!used.has(d)).forEach(d=>runs.push([d,near(d)]));                     // odd one out gets its own run
+  } else {   // daisy chain: nearest-neighbour from the source outwards, optionally max N per circuit
+    const groups=new Map(); devs.forEach(d=>{ const s=near(d); if(!groups.has(s)) groups.set(s,[]); groups.get(s).push(d); });
+    groups.forEach((g,s)=>{ const rem=g.slice(), lim=R.max>0?R.max:Infinity;
+      while(rem.length){ const ch=[s]; let cur=s;
+        while(rem.length&&ch.length-1<lim){ let bi=0; rem.forEach((d,i)=>{ if(D(cur,d)<D(cur,rem[bi])) bi=i; }); cur=rem.splice(bi,1)[0]; ch.push(cur); }
+        runs.push(ch.reverse()); } });
+  }
+  PM.data.items=items.filter(i=>!(i.t==='wire'&&i.k===k));
+  runs.forEach(r=>PM.data.items.push({t:'wire',id:pmUid(),k,r:R.rule,w:R.wire||'',c:R.color,x:r[0].x,y:r[0].y,n:r.map(P),d:r.map(i=>i.id),g:r.slice(1).map(()=>['h',null])}));
+  return {n:runs.length};
+}
+function pmWireGen(which){
+  const items=PM.data.items||[];
+  const keys=which==='__all'?[...new Set(items.filter(i=>i.t==='sym').map(i=>i.k))].filter(pmWired):[which];
+  if(!keys.length){ pmStatus('Nothing to wire on this plan','err'); return; }
+  const before=JSON.stringify(PM.data); let runs=0; const missing=new Set();
+  keys.forEach(k=>{ const r=pmGenWiresFor(k); if(r.missing) missing.add(r.missing); else runs+=r.n||0; });
+  if(JSON.stringify(PM.data)!==before){ PM.undo.push(before); if(PM.undo.length>60) PM.undo.shift(); PM.redo=[]; PM.showWires=true; }
+  PM.sel=null; pmRender(); pmRenderInsp(); pmChanged();
+  if(missing.size){ const role=[...missing][0], l=pmSrcLegend(role); PM.pendingGen=which;
+    pmToast(`No <b>${PM_SRC[role]}</b> on this plan yet — tap the plan where it is, and the runs are generated.`,6000);
+    if(l) pmSetTool('sym:'+l.id);
+    pmStatus((runs?runs+' runs · ':'')+'place a '+PM_SRC[role]+' first','err'); }
+  else pmStatus(`Generated ${runs} run${runs===1?'':'s'} — press Save to keep`,'dirty');
+}
+function pmWireClear(which){
+  const items=PM.data.items||[]; const n=items.filter(i=>i.t==='wire'&&(which==='__all'||i.k===which)).length; if(!n) return;
+  pmSnapshot(); PM.data.items=items.filter(i=>!(i.t==='wire'&&(which==='__all'||i.k===which)));
+  if(PM.sel&&!pmItem(PM.sel)) PM.sel=null; pmRender(); pmRenderInsp(); pmChanged(); pmStatus(`Cleared ${n} run${n===1?'':'s'} — press Save to keep`,'dirty');
+}
+function pmScaleTap(u,v){
+  PM.scalePts=(PM.scalePts||[]).concat([[u,v]]); pmRender(); pmRenderWopts();
+  if(PM.scalePts.length<2) return;
+  const [a,b]=PM.scalePts;
+  setTimeout(()=>{
+    const r=prompt('Real distance between the two points, in feet (e.g. 14.5):','');
+    const d=parseFloat(String(r||'').replace(/[^0-9.]/g,''));
+    if(d>0){ pmSnapshot(); PM.data.scale={a:[a[0],a[1]],b:[b[0],b[1]],d:Math.round(d*100)/100,u:'ft'}; pmChanged(); pmStatus('Scale set · '+d+' ft','ok'); }
+    pmSetTool('wire');
+  },40);
+}
+/* wiring options row in the edit panel */
+function pmRenderWopts(){
+  const el=document.getElementById('pmWopts'); if(!el) return;
+  const on=PM.edit&&(PM.tool==='wire'||PM.tool==='scale'); el.classList.toggle('on',on);
+  if(!on){ el.innerHTML=''; return; }
+  const items=PM.data.items||[], cnt={}; items.forEach(i=>{ if(i.t==='sym') cnt[i.k]=(cnt[i.k]||0)+1; });
+  const keys=Object.keys(cnt).filter(pmWired).sort((a,b)=>((PM.lmap[a]||{}).sort||0)-((PM.lmap[b]||{}).sort||0));
+  const have=r=>items.some(i=>i.t==='sym'&&pmRule(i.k).rule==='source'&&pmRule(i.k).src===r);
+  const warn=[...new Set(keys.map(k=>pmRule(k).to))].filter(r=>!have(r)).map(r=>{ const l=pmSrcLegend(r);
+    return `<div class="pm-warn">No ${PM_SRC[r]} on this plan yet.${l?` <button class="pm-tb" data-psrc="${pmEsc(l.id)}">${pmSymHTML(l)} Place one</button>`:''}</div>`; }).join('');
+  const nW=k=>items.filter(i=>i.t==='wire'&&i.k===k).length, anyW=items.some(i=>i.t==='wire'), sc=PM.data.scale;
+  const rows=keys.map(k=>{ const l=PM.lmap[k], R=pmRule(k), n=nW(k);
+    return `<div class="pm-wr" data-wk="${pmEsc(k)}">${pmSymHTML(l)}<span class="nm"><b>${pmEsc(l?l.name:k)}</b> ×${cnt[k]}<small>${PM_RULES[R.rule]} · ${pmEsc(R.wire||'wire')} → ${PM_SRC[R.to]}${n?` · ${n} run${n===1?'':'s'}`:''}</small></span><button class="pm-tb" data-wgen="${pmEsc(k)}">${n?'Redo':'Generate'}</button>${n?`<button class="pm-tb danger" data-wclr="${pmEsc(k)}" title="Clear these runs">&#x2715;</button>`:''}</div>`; }).join('');
+  el.innerHTML=`<div class="pm-wr"><button class="pm-tb primary" data-wgen="__all"${keys.length?'':' disabled'}>&#x26A1; Generate all</button>${anyW?'<button class="pm-tb danger" data-wclr="__all">Clear wiring</button>':''}</div>${warn}
+    <div class="pm-wlist">${rows||'<div class="pm-wh2">Place devices that have a wiring rule (cameras, speakers, lights…), then generate their runs here.</div>'}</div>
+    <div class="pm-wr"><button class="pm-tb${PM.tool==='scale'?' on':''}" id="pmScaleBtn">&#x1F4CF; Set scale</button><span class="nm"><small>${PM.tool==='scale'?((PM.scalePts||[]).length?'Now tap the second point…':'Tap two points a known distance apart (e.g. the ends of a dimensioned wall).'):sc?`Scale set (${pmEsc(sc.d)} ft reference) — lengths in feet`:'No scale yet — lengths in plan units (u = 1% of plan width)'}</small></span>${sc&&PM.tool!=='scale'?'<button class="pm-tb danger" id="pmScaleClr" title="Remove the scale">&#x2715;</button>':''}</div>
+    <span class="pm-wh2">Tap a run to select it, drag its white dots to move bends. ✎ Edit on a legend item sets its wiring rule.</span>`;
+  el.querySelectorAll('[data-wgen]').forEach(b=>b.onclick=()=>pmWireGen(b.dataset.wgen));
+  el.querySelectorAll('[data-wclr]').forEach(b=>b.onclick=()=>pmWireClear(b.dataset.wclr));
+  el.querySelectorAll('[data-psrc]').forEach(b=>b.onclick=()=>{ PM.pendingGen=null; pmSetTool('sym:'+b.dataset.psrc); });
+  document.getElementById('pmScaleBtn').onclick=()=>{ PM.scalePts=[]; pmSetTool(PM.tool==='scale'?'wire':'scale'); };
+  const sx=document.getElementById('pmScaleClr'); if(sx) sx.onclick=()=>{ pmSnapshot(); delete PM.data.scale; pmChanged(); };
+}
+/* legend item row (shown while placing a symbol): wiring summary + editor */
+function pmRenderLopts(){
+  const el=document.getElementById('pmLopts'); if(!el) return;
+  const on=PM.edit&&PM.tool.indexOf('sym:')===0, k=on?PM.tool.slice(4):null, l=k&&PM.lmap[k];
+  el.classList.toggle('on',!!l); if(!l){ el.innerHTML=''; return; }
+  const R=pmRule(k);
+  const sum=R.rule==='source'?PM_SRC[R.src]+' — runs end here':R.rule==='none'?'no wiring':`${PM_RULES[R.rule]} · ${R.wire||'wire'} → ${PM_SRC[R.to]}`;
+  const canE=PM.canEdit&&!PM.notMigrated&&PM.legend.some(x=>x.id===k);
+  if(PM.legEdit!==k){
+    el.innerHTML=`<div class="pm-wr">${pmSymHTML(l)}<span class="nm"><b>${pmEsc(l.name)}</b><small>Tap the plan to place · wiring: ${pmEsc(sum)}</small></span>${canE?'<button class="pm-tb" id="pmLeEdit">&#x270E; Edit</button>':''}</div>`;
+    const b=document.getElementById('pmLeEdit'); if(b) b.onclick=()=>{ PM.legEdit=k; PM.legDraft={name:l.name,color:l.color,icon:l.icon,rule:R.rule,to:R.to,src:R.src,wire:R.wire,wcolor:R.color,max:R.max}; pmRenderLopts(); };
+    return;
+  }
+  const D=PM.legDraft, isT=String(D.icon).indexOf('text:')===0, wired=['home','pair','chain'].includes(D.rule);
+  el.innerHTML=`<div class="pm-le"><label>Legend item</label><input id="pmLeName" maxlength="60" value="${pmEsc(D.name)}">
+    <div class="row"><input type="color" id="pmLeColor" value="${pmEsc(D.color)}" title="Symbol colour"><select id="pmLeIcon" style="flex:1">${Object.keys(PM_ICONS).map(x=>`<option value="${x}"${D.icon===x?' selected':''}>${PM_ICON_NAMES[x]||x}</option>`).join('')}<option value="text"${isT?' selected':''}>Letters…</option></select><input id="pmLeLetters" maxlength="3" placeholder="AB" value="${isT?pmEsc(D.icon.slice(5)):''}" style="width:52px;display:${isT?'':'none'}"></div>
+    <label>Wiring rule</label><select id="pmLeRule">${['home','pair','chain','none','source'].map(r=>`<option value="${r}"${D.rule===r?' selected':''}>${PM_RULES[r]}</option>`).join('')}</select>
+    ${D.rule==='source'?`<select id="pmLeSrc"><option value="rack"${D.src==='rack'?' selected':''}>Rack / head-end (home runs end here)</option><option value="panel"${D.src==='panel'?' selected':''}>Breaker / panel (daisy chains end here)</option></select>`:''}
+    ${wired?`<div class="row"><span style="color:#9a9388">to</span><select id="pmLeTo" style="flex:1"><option value="rack"${D.to==='rack'?' selected':''}>Rack / head-end</option><option value="panel"${D.to==='panel'?' selected':''}>Breaker / panel</option></select></div>
+      <div class="row"><input id="pmLeWire" maxlength="40" placeholder="Wire (e.g. Cat6)" value="${pmEsc(D.wire)}" style="flex:1;min-width:0"><input type="color" id="pmLeWc" value="${pmEsc(D.wcolor)}" title="Line colour"></div>
+      ${D.rule==='chain'?`<div class="row"><span style="color:#9a9388">Max per circuit</span><input id="pmLeMax" type="number" min="0" max="100" value="${Number(D.max)||0}" style="width:66px"><span style="color:#9a9388;font-size:11px">0 = no limit</span></div>`:''}`:''}
+    <div class="row"><button class="pm-tb" id="pmLeCancel">Cancel</button><span style="flex:1"></span><button class="pm-tb primary" id="pmLeSave">Save legend item</button></div></div>`;
+  const $=id=>document.getElementById(id), bind=(id,f)=>{ const x=$(id); if(x) x.oninput=()=>{ D[f]=x.value; }; };
+  bind('pmLeName','name'); bind('pmLeColor','color'); bind('pmLeWire','wire'); bind('pmLeWc','wcolor'); bind('pmLeMax','max');
+  $('pmLeIcon').onchange=()=>{ const v=$('pmLeIcon').value; $('pmLeLetters').style.display=v==='text'?'':'none'; D.icon=v==='text'?'text:'+$('pmLeLetters').value.trim().toUpperCase():v; };
+  $('pmLeLetters').oninput=()=>{ D.icon='text:'+$('pmLeLetters').value.trim().toUpperCase(); };
+  $('pmLeRule').onchange=()=>{ D.rule=$('pmLeRule').value; if(D.rule==='chain') D.to='panel'; else if(D.rule==='home'||D.rule==='pair') D.to='rack'; pmRenderLopts(); };
+  if($('pmLeSrc')) $('pmLeSrc').onchange=()=>{ D.src=$('pmLeSrc').value; };
+  if($('pmLeTo')) $('pmLeTo').onchange=()=>{ D.to=$('pmLeTo').value; };
+  $('pmLeCancel').onclick=()=>{ PM.legEdit=null; pmRenderLopts(); };
+  $('pmLeSave').onclick=pmLegSave;
+}
+async function pmLegSave(){
+  const D=PM.legDraft, k=PM.legEdit; if(!D||!k) return;
+  const name=String(D.name||'').trim(); if(!name){ alert('Give the legend item a name.'); return; }
+  if(D.icon==='text:'){ alert('Type 1–3 letters for the badge.'); return; }
+  const wiring=D.rule==='source'?{rule:'source',src:D.src}:D.rule==='none'?{rule:'none'}:{rule:D.rule,to:D.to,wire:String(D.wire||'').trim(),color:D.wcolor,max:Number(D.max)||0};
+  try{
+    await pmApi('plans/legend',{method:'POST',body:{id:k,name,color:D.color,icon:D.icon,wiring}});
+    await pmEnsureLegend(true);
+    const ws=(PM.data.items||[]).filter(i=>i.t==='wire'&&i.k===k);
+    if(ws.length&&wiring.color){ pmSnapshot(); ws.forEach(w=>{ w.c=wiring.color; w.w=wiring.wire; w.r=wiring.rule; }); }
+    PM.legEdit=null; pmRender(); pmRenderPanel(); pmChanged();
+    pmStatus('Legend item saved'+(ws.length?' — runs updated, press Save':''),'ok');
+  }catch(e){ alert(e.message); }
+}
+/* --- device counter (edit + view + room views) --- */
+async function pmLoadProj(){
+  const p=PM.project; if(!p) return;
+  try{ const d=await pmApi('plans/markups?project='+encodeURIComponent(p)); if(PM.project!==p) return; PM.proj={project:p,markups:d.markups||[]}; }
+  catch(e){ if(PM.project===p) PM.proj={project:p,markups:[],err:true}; }
+  pmRenderCnt();
+}
+function pmProjList(){
+  const o=((PM.proj&&PM.proj.project===PM.project&&PM.proj.markups)||[]).filter(m=>m.plan_key!==PM.plan);
+  return o.concat([{plan_key:PM.plan,label:PM.label,data:PM.data}]);
+}
+function pmToggleCnt(){ PM.cntOpen=!PM.cntOpen; pmRenderCnt(); pmBarBtns(); }
+function pmToggleWires(){ PM.showWires=!PM.showWires; pmBarBtns(); pmRenderCnt(); }
+function pmBarBtns(){
+  const its=PM.data.items||[], hasSym=its.some(i=>i.t==='sym'), hasW=its.some(i=>i.t==='wire');
+  const cb=document.getElementById('pmCntBtn'); if(cb){ cb.hidden=!(hasSym||hasW||PM.edit); cb.classList.toggle('on',!!PM.cntOpen); }
+  const wb=document.getElementById('pmWireBtn'); if(wb){ wb.hidden=!hasW||PM.edit; wb.classList.toggle('on',PM.showWires); wb.innerHTML=PM.showWires?'&#x26A1; Wiring on':'&#x26A1; Wiring off'; }
+  const ov=document.getElementById('fvOverlay'); if(ov) ov.classList.toggle('nowires',!PM.showWires&&!PM.edit);
+}
+function pmRenderCnt(){
+  const k=document.getElementById('pmCnt'); if(!k) return;
+  k.classList.toggle('on',!!PM.cntOpen); if(!PM.cntOpen){ k.innerHTML=''; return; }
+  const items=PM.data.items||[], R=FV.region, list=pmProjList(), pc=pmProjCounts(list), loaded=!!(PM.proj&&PM.proj.project===PM.project);
+  const here={}, plan={}; items.forEach(i=>{ if(i.t!=='sym') return; plan[i.k]=(plan[i.k]||0)+1; if(pmInRegion(i,R)) here[i.k]=(here[i.k]||0)+1; });
+  const keys=Object.keys(pc).sort((a,b)=>((PM.lmap[a]||{}).sort||0)-((PM.lmap[b]||{}).sort||0));
+  const floors=list.filter(m=>((m.data&&m.data.items)||[]).some(i=>i.t==='sym')).length;
+  const cols=R?['Room','Floor','All floors']:['This floor','All floors'];
+  const row=kk=>{ const l=PM.lmap[kk]||{id:kk,name:'(removed)',color:'#888888',icon:'dot'};
+    const v=R?[here[kk]||0,plan[kk]||0,pc[kk]||0]:[plan[kk]||0,pc[kk]||0];
+    return `<tr data-k="${pmEsc(kk)}"><td><span class="nmc">${pmSymHTML(l)}${pmEsc(l.name)}</span></td>${v.map((n,i)=>`<td>${i===0?`<b>${n}</b>`:n}</td>`).join('')}</tr>`; };
+  let tot=R?[0,0,0]:[0,0]; keys.forEach(kk=>{ const v=R?[here[kk]||0,plan[kk]||0,pc[kk]||0]:[plan[kk]||0,pc[kk]||0]; v.forEach((n,i)=>tot[i]+=n); });
+  const wsHere=pmWireSummary(PM.data,R), acc={}; list.forEach(m=>pmWireSummary(m.data,null,acc)); const wsAll=Object.values(acc).sort((a,b)=>a.w.localeCompare(b.w));
+  const allMap={}; wsAll.forEach(w=>allMap[w.w]=w);
+  const anyW=items.some(i=>i.t==='wire'), sc=PM.data.scale;
+  k.innerHTML=`<div class="pm-ch"><b>Device counts</b><span style="color:#9a9388;font-size:11px">${R?'this room':pmEsc(PM.label||'this floor')}</span><button class="pm-x" onclick="pmToggleCnt()" aria-label="Close counts">&times;</button></div>
+    ${keys.length?`<table class="pm-ct"><tr><th>Device</th>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>${keys.map(row).join('')}
+      <tr class="tot"><td><b>Total</b></td>${tot.map(n=>`<td><b>${n}</b></td>`).join('')}</tr></table>`:'<div class="ft">No devices placed yet.</div>'}
+    <div class="ft">All floors = ${loaded?`${floors} marked-up plan${floors===1?'':'s'} in this project`:'loading…'}.</div>
+    <h4>Wire runs${R?' · through this room':' · this floor'}</h4>
+    ${wsHere.length?`<table class="pm-wt"><tr><th>Wire</th><th>Runs</th><th>Length</th><th>All floors</th></tr>${wsHere.map(w=>{ const a=allMap[w.w];
+      return `<tr data-w="${pmEsc(w.w)}"><td><span class="nmc"><i class="wsw" style="background:${pmEsc(w.c)}"></i>${pmEsc(w.w)}</span></td><td><b>${w.runs}</b></td><td>${pmFmtLen(w)}</td><td>${a?a.runs+' · '+pmFmtLen(a):''}</td></tr>`; }).join('')}</table>`
+      :`<div class="ft">${wsAll.length?'No runs here — other floors: '+wsAll.map(w=>pmEsc(w.w)+' ×'+w.runs).join(', '):'No wiring generated yet'+(PM.edit?' — use ⚡ Wiring in the panel.':'.')}</div>`}
+    <div class="ft">${sc?`Lengths in feet from the plan scale (${pmEsc(sc.d)} ft reference); approximate — add slack and vertical drops.`:'Lengths in plan units (u = 1% of the plan width). Set a scale in Plans edit → ⚡ Wiring to see feet.'}</div>
+    ${anyW&&!PM.edit?`<label class="tg"><input type="checkbox" id="pmCntWires"${PM.showWires?' checked':''}> Show wiring on the plan</label>`:''}`;
+  const cw=document.getElementById('pmCntWires'); if(cw) cw.onchange=()=>{ PM.showWires=cw.checked; pmBarBtns(); };
 }
 
 /* ---------------- room views outside the viewer ---------------- */
@@ -796,7 +1143,10 @@ async function pmProjectRooms(project){
 function pmRenderStatic(container,planKey,items,R){
   container.innerHTML='<div class="pm-static" style="position:relative;overflow:hidden;width:100%;background:#fff;border-radius:10px"><div class="fv-layer pm-sl" style="left:0;top:0;transform-origin:0 0"><img alt="" draggable="false"><div class="pm-layer"></div></div></div>';
   const wrap=container.firstChild, ly=wrap.firstChild, im=ly.querySelector('img');
-  const html=(items||[]).filter(i=>i.t!=='room').map(it=>{ const s=PM.sel; PM.sel=null; const h=pmItemHTML(it); PM.sel=s; return h; }).join('');
+  const its=(items||[]).filter(i=>i.t!=='room'), ord={erase:-1,note:1,text:2,sym:3}, s0=PM.sel, e0=PM.edit; PM.sel=null; PM.edit=false;
+  const html=its.filter(i=>i.t==='erase').map(pmItemHTML).join('')+pmWiresHTML(its,false)
+    +its.filter(i=>i.t!=='erase'&&i.t!=='wire').sort((a,b)=>(ord[a.t]||0)-(ord[b.t]||0)).map(pmItemHTML).join('');
+  PM.sel=s0; PM.edit=e0;
   ly.querySelector('.pm-layer').innerHTML=html;
   const lay=()=>{ if(!im.naturalWidth) return; const nw=im.naturalWidth,nh=im.naturalHeight; const cw=wrap.clientWidth||600;
     const s=cw/(nw*R.w); ly.style.width=nw+'px'; ly.style.height=nh+'px';

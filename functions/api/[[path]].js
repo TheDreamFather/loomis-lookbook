@@ -279,13 +279,50 @@ function cleanMarkup(d) {
         out.push({ ...base, m: "brush", pts, sw, ar });
       } else out.push({ ...base, m: "rect" });
     }
+    else if (it.t === "wire") {
+      // generated wiring run: n = anchor points (device(s) ... source), d = the symbol id at each
+      // anchor (the run follows a moved symbol), g = per-leg [orientation h|v, bend position|null]
+      const pts = (Array.isArray(it.n) ? it.n : []).slice(0, 400)
+        .map((p) => Array.isArray(p) ? [n01(p[0]), n01(p[1])] : null)
+        .filter((p) => p && p[0] !== null && p[1] !== null);
+      if (pts.length < 2) continue;
+      const d = pts.map((_, i) => (Array.isArray(it.d) && it.d[i] != null) ? str(it.d[i], 40) : null);
+      const g = pts.slice(1).map((_, i) => { const q = Array.isArray(it.g) ? it.g[i] : null; const o = (q && q[0] === "v") ? "v" : "h"; const m = q && q[1] != null ? n01(q[1]) : null; return [o, m]; });
+      const r = ["home", "pair", "chain"].includes(it.r) ? it.r : "home";
+      out.push({ t: "wire", id, k: str(it.k, 60), r, w: str(it.w, 60), c: color(it.c) || "#888888", x: pts[0][0], y: pts[0][1], n: pts, d, g });
+    }
     else if (it.t === "room") {
       const w = n01(it.w), h = n01(it.h);
       if (!w || !h || w < 0.005 || h < 0.005) continue;
       out.push({ t: "room", id, x, y, w: Math.min(w, 1 - x), h: Math.min(h, 1 - y), room_id: str(it.room_id, 80) || null, name: str(it.name, 120) });
     }
   }
-  return { items: out };
+  const res = { items: out };
+  // plan scale for wire lengths: two points (0..1) a known real distance apart
+  const sc = d.scale;
+  if (sc && typeof sc === "object" && Array.isArray(sc.a) && Array.isArray(sc.b)) {
+    const a = [n01(sc.a[0]), n01(sc.a[1])], b = [n01(sc.b[0]), n01(sc.b[1])], dist = Number(sc.d);
+    if (a[0] !== null && a[1] !== null && b[0] !== null && b[1] !== null && dist > 0 && dist < 100000)
+      res.scale = { a, b, d: Math.round(dist * 100) / 100, u: sc.u === "m" ? "m" : "ft" };
+  }
+  const ar = Number(d.ar); if (ar > 0.05 && ar < 20) res.ar = Math.round(ar * 100000) / 100000; // plan height / width
+  return res;
+}
+// Plans edit: validate a legend item's wiring rule (stored as JSON text in plan_legend.wiring)
+function cleanWiring(w) {
+  if (w == null || w === "") return null;
+  if (typeof w === "string") { try { w = JSON.parse(w); } catch (e) { return null; } }
+  if (!w || typeof w !== "object") return null;
+  const rule = ["home", "pair", "chain", "none", "source"].includes(w.rule) ? w.rule : "none";
+  const o = { rule };
+  if (rule === "source") o.src = w.src === "panel" ? "panel" : "rack";
+  else if (rule !== "none") {
+    o.to = w.to === "panel" ? "panel" : w.to === "rack" ? "rack" : (rule === "chain" ? "panel" : "rack");
+    o.wire = String(w.wire || "").trim().slice(0, 40);
+    if (/^#[0-9a-fA-F]{6}$/.test(String(w.color || ""))) o.color = String(w.color);
+    const mx = Math.round(Number(w.max) || 0); if (mx > 0) o.max = Math.min(100, mx);
+  }
+  return JSON.stringify(o);
 }
 function canEditScope(user){ return isTeam(user); }
 async function makeInviteToken(secret, userId, ttlMs){
@@ -962,11 +999,15 @@ export async function onRequest(context) {
       if (!user) return json({ error: "Please sign in." }, 401);
       const who = user.name || user.last_name;
       const missing = (e) => /no such table/i.test(String((e && e.message) || e));
+      const noCol = (e) => /no such column|has no column/i.test(String((e && e.message) || e));
       const notMigrated = () => json({ error: "Plans edit is not set up on this database yet (run migrations/0001_plans_edit.sql).", not_migrated: true }, 503);
       try {
         if (route === "plans/legend" && method === "GET") {
-          const { results } = await env.DB.prepare("SELECT id,name,color,icon,sort FROM plan_legend WHERE active=1 ORDER BY sort ASC, name ASC").all();
-          return json({ items: results || [], can_edit: isTeam(user) }, 200, { "cache-control": "no-store" });
+          let rows;
+          try { rows = (await env.DB.prepare("SELECT id,name,color,icon,sort,wiring FROM plan_legend WHERE active=1 ORDER BY sort ASC, name ASC").all()).results; }
+          catch (e) { if (!noCol(e)) throw e; rows = (await env.DB.prepare("SELECT id,name,color,icon,sort FROM plan_legend WHERE active=1 ORDER BY sort ASC, name ASC").all()).results; }
+          const items = (rows || []).map((r) => ({ ...r, wiring: r.wiring ? safeJSON(r.wiring, null) : null }));
+          return json({ items, can_edit: isTeam(user) }, 200, { "cache-control": "no-store" });
         }
         if (route === "plans/legend" && method === "POST") {
           if (!isTeam(user)) return json({ error: "View-only." }, 403);
@@ -977,18 +1018,30 @@ export async function onRequest(context) {
           if (!name) return json({ error: "Name required." }, 400);
           if (!/^#[0-9a-fA-F]{6}$/.test(color)) return json({ error: "Colour must be #rrggbb." }, 400);
           if (!/^(text:[A-Za-z0-9+#&-]{1,3}|[a-z0-9-]{1,20})$/.test(icon)) return json({ error: "Unknown icon." }, 400);
+          const hasW = b.wiring !== undefined;
+          const wiring = hasW ? cleanWiring(b.wiring) : null;
           const now = new Date().toISOString();
           let id = String(b.id || "").trim();
-          if (id) {
-            const r = await env.DB.prepare("UPDATE plan_legend SET name=?,color=?,icon=? WHERE id=?").bind(name, color, icon, id).run();
-            if (!((r.meta && r.meta.changes) || 0)) return json({ error: "Legend item not found." }, 404);
-          } else {
-            id = "lg-" + slugify(name).slice(0, 30) + "-" + Date.now().toString(36);
-            const mx = await env.DB.prepare("SELECT COALESCE(MAX(sort),0) AS m FROM plan_legend").first();
-            await env.DB.prepare("INSERT INTO plan_legend (id,name,color,icon,sort,active,created_at,created_by) VALUES (?,?,?,?,?,1,?,?)")
-              .bind(id, name, color, icon, ((mx && mx.m) || 0) + 10, now, who).run();
+          try {
+            if (id) {
+              const r = hasW
+                ? await env.DB.prepare("UPDATE plan_legend SET name=?,color=?,icon=?,wiring=? WHERE id=?").bind(name, color, icon, wiring, id).run()
+                : await env.DB.prepare("UPDATE plan_legend SET name=?,color=?,icon=? WHERE id=?").bind(name, color, icon, id).run();
+              if (!((r.meta && r.meta.changes) || 0)) return json({ error: "Legend item not found." }, 404);
+            } else {
+              id = "lg-" + slugify(name).slice(0, 30) + "-" + Date.now().toString(36);
+              const mx = await env.DB.prepare("SELECT COALESCE(MAX(sort),0) AS m FROM plan_legend").first();
+              const so = ((mx && mx.m) || 0) + 10;
+              if (hasW) await env.DB.prepare("INSERT INTO plan_legend (id,name,color,icon,wiring,sort,active,created_at,created_by) VALUES (?,?,?,?,?,?,1,?,?)")
+                .bind(id, name, color, icon, wiring, so, now, who).run();
+              else await env.DB.prepare("INSERT INTO plan_legend (id,name,color,icon,sort,active,created_at,created_by) VALUES (?,?,?,?,?,1,?,?)")
+                .bind(id, name, color, icon, so, now, who).run();
+            }
+          } catch (e) {
+            if (noCol(e)) return json({ error: "Wiring rules need the plan_legend.wiring column — re-run migrations/0001_plans_edit.sql on this database.", not_migrated: true }, 503);
+            throw e;
           }
-          return json({ ok: true, id });
+          return json({ ok: true, id, wiring: wiring ? JSON.parse(wiring) : null });
         }
         if (route === "plans/legend" && method === "DELETE") {
           if (!isTeam(user)) return json({ error: "View-only." }, 403);
