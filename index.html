@@ -1471,16 +1471,22 @@ async function loadPdfJs(){ if(window.pdfjsLib) return window.pdfjsLib;
 async function ingestPlans(file){
   const status=document.getElementById('plansDropStatus');
   const set=t=>{ if(status) status.innerHTML='<span>'+escapeHTML(t)+'</span>'; };
+  // Duplicate guard: same file name already uploaded to this project?
+  const base=file.name.replace(/\.pdf$/i,'');
+  try{ const ex=(await api2('scope/plans?project='+encodeURIComponent(CUR_PID))).plans||[];
+    const dup=ex.filter(p=>String(p.label||'').startsWith(base+' p'));
+    if(dup.length && !confirm('"'+file.name+'" was already uploaded to this project ('+dup.length+' page(s)).\nUpload it again anyway? The new pages will replace the floor list.')){ set('Upload cancelled — "'+file.name+'" is already on this project.'); return; }
+  }catch(e){}
   set('Reading '+file.name+'…');
   let lib; try{ lib=await loadPdfJs(); }catch(e){ set('PDF engine failed to load.'); return; }
   let pdf; try{ const buf=await file.arrayBuffer(); pdf=await lib.getDocument({data:buf}).promise; }catch(e){ set('Could not read that PDF.'); return; }
-  const nPages=Math.min(pdf.numPages,12); let allText='', pageUrls=[];
+  const nPages=Math.min(pdf.numPages,12); let allText='', pageUrls=[], errs=[];
   for(let i=1;i<=nPages;i++){ set('Rendering page '+i+' / '+nPages+'…');
     const page=await pdf.getPage(i); let url=null;
     for(const mq of [[1500,0.6],[1200,0.55],[950,0.5]]){ const vp1=page.getViewport({scale:1}); const scale=Math.min(2,mq[0]/vp1.width); const vp=page.getViewport({scale});
       const cv=document.createElement('canvas'); cv.width=Math.ceil(vp.width); cv.height=Math.ceil(vp.height); const cx=cv.getContext('2d'); cx.fillStyle='#fff'; cx.fillRect(0,0,cv.width,cv.height);
       await page.render({canvasContext:cx,viewport:vp}).promise; const u=cv.toDataURL('image/jpeg',mq[1]); if(u.length<1200000){ url=u; break; } }
-    if(url){ try{ const r=await api2('scope/plan',{method:'POST',body:{project:CUR_PID,label:file.name.replace(/\.pdf$/i,'')+' p'+i,page_no:i,data_url:url}}); pageUrls.push(r.url); }catch(e){} }
+    if(url){ try{ const r=await api2('scope/plan',{method:'POST',body:{project:CUR_PID,label:file.name.replace(/\.pdf$/i,'')+' p'+i,page_no:i,data_url:url}}); pageUrls.push(r.url); }catch(e){ errs.push('page '+i+': '+(e.message||e)); } }
     try{ const tc=await page.getTextContent(); allText+=' '+tc.items.map(it=>it.str).join(' '); }catch(e){}
   }
   set('Detecting rooms…');
@@ -1494,9 +1500,12 @@ async function ingestPlans(file){
     for(const w of found){ const nm=w.replace(/\b\w/g,c=>c.toUpperCase()); if(have.has(nm.toLowerCase())) continue;
       try{ await api2('scope/room',{method:'POST',body:{project:CUR_PID,name:nm,floor:'Main'}}); created++; }catch(e){} }
     if(pageUrls[0]){ try{ await api2('scope/assign-drawing',{method:'POST',body:{project:CUR_PID,drawing_url:pageUrls[0],all:true}}); }catch(e){} }
-    try{ if(pageUrls.length){ CUR_CFG.category_vis=CUR_CFG.category_vis||{}; CUR_CFG.category_vis.__floors__=pageUrls.map((u,i)=>({label:'Floor '+(i+1),img:u})); await api2('project-config',{method:'POST',body:{project:CUR_PID,category_vis:CUR_CFG.category_vis}}); } }catch(e){}
+    try{ if(pageUrls.length){ CUR_CFG.category_vis=CUR_CFG.category_vis||{}; CUR_CFG.category_vis.__floors__=pageUrls.map((u,i)=>({label:'Floor '+(i+1),img:u})); await api2('project-config',{method:'POST',body:{project:CUR_PID,category_vis:CUR_CFG.category_vis}}); } }catch(e){ errs.push('saving floor list: '+(e.message||e)); }
   }catch(e){}
-  set('Ingested '+nPages+' page(s), detected '+found.length+' room(s), created '+created+'. Open the room tool to tighten per-room crops (low-confidence rooms flagged there).');
+  const msg=(pageUrls.length?'Ingested '+pageUrls.length+' of '+nPages+' page(s)':'No pages were saved')+', detected '+found.length+' room(s), created '+created+'.'+(errs.length?' Problems: '+errs.join('; '):'');
+  // Re-render so the new floors show immediately (previously nothing refreshed).
+  if(pageUrls.length && document.getElementById('plansDrop')){ try{ renderPlans(true); }catch(e){} }
+  const st2=document.getElementById('plansDropStatus'); if(st2) st2.innerHTML='<span>'+escapeHTML(msg)+'</span>';
 }
 
 async function newProjectFlow(){

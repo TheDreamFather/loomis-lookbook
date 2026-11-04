@@ -931,9 +931,17 @@ export async function onRequest(context) {
       const row = await env.DB.prepare("SELECT project_id, mime, img FROM scope_plans WHERE id=?").bind(id).first();
       // Same 404 for "missing" and "not yours" so plan ids can't be probed.
       if (!row || !row.img || !canView(user, row.project_id)) return json({ error: "Not found." }, 404);
-      const bytes = (row.img instanceof ArrayBuffer) ? new Uint8Array(row.img) : row.img;
+      // D1 can hand BLOBs back as ArrayBuffer, a typed array, or a plain number[] —
+      // passing a plain array to Response produced an EMPTY 200 body (blank plans).
+      const raw = row.img;
+      const bytes = (raw instanceof ArrayBuffer) ? new Uint8Array(raw)
+        : ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+        : Array.isArray(raw) ? Uint8Array.from(raw)
+        : (typeof raw === "string") ? Uint8Array.from(raw, c => c.charCodeAt(0) & 255)
+        : new Uint8Array(0);
+      if (!bytes.length) return json({ error: "Not found." }, 404);
       // private: per-user access, must not be stored by shared caches.
-      return new Response(bytes, { headers: { "content-type": row.mime || "image/jpeg", "cache-control": "private, max-age=86400" } });
+      return new Response(bytes, { headers: { "content-type": row.mime || "image/jpeg", "content-length": String(bytes.length), "cache-control": "private, max-age=86400" } });
     }
     if (route === "scope/plans" && method === "GET") {
       await ensureScopeTables(env);
